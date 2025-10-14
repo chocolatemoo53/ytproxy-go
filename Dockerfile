@@ -9,7 +9,7 @@ COPY .git .git
 COPY . .
 
 RUN  --mount=type=cache,target=/root/.cache/go-build \
-    go build -ldflags "-s -w -X 'main.version=$(date '+%Y-%m-%d')-$(git rev-list --abbrev-commit -1 HEAD)'" ./cmd/http3-ytproxy
+    make build
 
 FROM alpine:3.21
 
