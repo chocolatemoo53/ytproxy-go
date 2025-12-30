@@ -1,13 +1,13 @@
-package paths
+package routes
 
 import (
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"git.nadeko.net/Fijxu/http3-ytproxy/internal/httpc"
+	"git.nadeko.net/Fijxu/http3-ytproxy/internal/log"
 	"git.nadeko.net/Fijxu/http3-ytproxy/internal/metrics"
 	"git.nadeko.net/Fijxu/http3-ytproxy/internal/utils"
 )
@@ -20,7 +20,7 @@ func Vi(w http.ResponseWriter, req *http.Request) {
 
 	proxyURL, err := url.Parse("https://" + host + path)
 	if err != nil {
-		log.Panic(err)
+		log.Logger.Panic().Err(err).Msg("failed to create proxy URL for /vi request")
 	}
 
 	if strings.HasSuffix(proxyURL.EscapedPath(), "maxres.jpg") {
@@ -36,14 +36,14 @@ func Vi(w http.ResponseWriter, req *http.Request) {
 
 	request, err := http.NewRequest(req.Method, proxyURL.String(), nil)
 	if err != nil {
-		log.Panic(err)
+		log.Logger.Panic().Err(err).Msg("failed to create request")
 	}
 
 	request.Header.Set("User-Agent", default_ua)
 
 	resp, err := httpc.Client.Do(request)
 	if err != nil {
-		log.Panic(err)
+		log.Logger.Panic().Err(err).Msg("failed to do request")
 	}
 
 	if err := forbiddenChecker(resp, w); err != nil {
@@ -55,5 +55,5 @@ func Vi(w http.ResponseWriter, req *http.Request) {
 
 	w.WriteHeader(resp.StatusCode)
 
-	io.Copy(w, resp.Body)
+	_, _ = io.Copy(w, resp.Body)
 }

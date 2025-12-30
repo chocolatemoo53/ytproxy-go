@@ -1,11 +1,10 @@
-package paths
+package routes
 
 import (
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -14,6 +13,7 @@ import (
 
 	"git.nadeko.net/Fijxu/http3-ytproxy/internal/config"
 	"git.nadeko.net/Fijxu/http3-ytproxy/internal/httpc"
+	"git.nadeko.net/Fijxu/http3-ytproxy/internal/log"
 	"git.nadeko.net/Fijxu/http3-ytproxy/internal/metrics"
 	"git.nadeko.net/Fijxu/http3-ytproxy/internal/utils"
 )
@@ -21,8 +21,9 @@ import (
 func forbiddenChecker(resp *http.Response, w http.ResponseWriter) error {
 	if resp.StatusCode == 403 {
 		w.WriteHeader(403)
-		io.WriteString(w, "Forbidden 403\n")
-		io.WriteString(w, "Maybe Youtube blocked the IP of this proxy?\n")
+		responseText := `Forbidden 403
+		Maybe Youtube blocked the IP of this proxy?`
+		_, _ = io.WriteString(w, responseText)
 		return fmt.Errorf("%s returned %d", resp.Request.Host, resp.StatusCode)
 	}
 	return nil
@@ -34,7 +35,7 @@ func checkRequest(w http.ResponseWriter, req *http.Request, params url.Values) b
 	parts := strings.Split(strings.ToLower(host), ".")
 	if len(parts) < 2 {
 		w.WriteHeader(400)
-		io.WriteString(w, "Invalid hostname.")
+		_, _ = io.WriteString(w, "Invalid hostname.")
 		return true
 	}
 
@@ -49,14 +50,14 @@ func checkRequest(w http.ResponseWriter, req *http.Request, params url.Values) b
 
 	if disallowed {
 		w.WriteHeader(401)
-		io.WriteString(w, "Non YouTube domains are not supported.")
+		_, _ = io.WriteString(w, "Non YouTube domains are not supported.")
 		return true
 	}
 
 	expire, err := strconv.ParseInt(params.Get("expire"), 10, 64)
 	if err != nil {
 		w.WriteHeader(500)
-		io.WriteString(w, "Expire query string undefined")
+		_, _ = io.WriteString(w, "Expire query string undefined")
 		return true
 	}
 
@@ -64,7 +65,7 @@ func checkRequest(w http.ResponseWriter, req *http.Request, params url.Values) b
 	// since they will return 403 from googlevideo server
 	if (expire - time.Now().Unix()) <= 0 {
 		w.WriteHeader(403)
-		io.WriteString(w, "Videoplayback URL has expired.")
+		_, _ = io.WriteString(w, "Videoplayback URL has expired.")
 		return true
 	}
 
@@ -121,18 +122,18 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 
 	proxyURL, err := url.Parse("https://" + host + path)
 	if err != nil {
-		log.Panic(err)
+		log.Logger.Panic().Err(err).Msg("failed to create proxy URL for /videoplayback request")
 	}
 
 	proxyURL.RawQuery = q.Encode()
 
 	postRequest, err := http.NewRequest("POST", proxyURL.String(), bytes.NewReader(protobuf_body))
 	if err != nil {
-		log.Panic("Failed to create postRequest:", err)
+		log.Logger.Panic().Err(err).Msg("failed to create POST request")
 	}
 	headRequest, err := http.NewRequest("HEAD", proxyURL.String(), nil)
 	if err != nil {
-		log.Panic("Failed to create headRequest:", err)
+		log.Logger.Panic().Err(err).Msg("failed to create HEAD request")
 	}
 
 	postRequest.Header = *videoplayback_headers
@@ -143,7 +144,7 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 	for i := 0; i < 5; i++ {
 		resp, err = httpc.Client.Do(headRequest)
 		if err != nil {
-			log.Panic("Failed to do HEAD request:", err)
+			log.Logger.Panic().Err(err).Msg("failed to do HEAD request")
 		}
 		if resp.Header.Get("Location") != "" {
 			new_url, _ := url.Parse(resp.Header.Get("Location"))
@@ -159,7 +160,7 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 
 	resp, err = httpc.Client.Do(postRequest)
 	if err != nil {
-		log.Panic("Failed to do POST request:", err)
+		log.Logger.Panic().Err(err).Msg("failed to do POST request")
 	}
 
 	if err := forbiddenChecker(resp, w); err != nil {
@@ -215,7 +216,7 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 	if req.Method == "GET" && (resp.Header.Get("Content-Type") == "application/x-mpegurl" || resp.Header.Get("Content-Type") == "application/vnd.apple.mpegurl") {
 		bytes, err := io.ReadAll(resp.Body)
 		if err != nil {
-			log.Panic(err)
+			log.Logger.Panic().Err(err).Msg("failed to read body")
 		}
 
 		lines := strings.Split(string(bytes), "\n")
@@ -237,8 +238,8 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 			}
 		}
 
-		io.WriteString(w, strings.Join(lines, "\n"))
+		_, _ = io.WriteString(w, strings.Join(lines, "\n"))
 	} else {
-		io.Copy(w, resp.Body)
+		_, _ = io.Copy(w, resp.Body)
 	}
 }

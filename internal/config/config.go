@@ -1,11 +1,12 @@
 package config
 
 import (
-	"log"
 	"os"
 	"syscall"
+	"time"
 
 	"github.com/kelseyhightower/envconfig"
+	"github.com/rs/zerolog"
 	"gopkg.in/yaml.v2"
 )
 
@@ -19,6 +20,7 @@ type config struct {
 		Host        string `yaml:"host" envconfig:"HOST"`
 		Port        string `yaml:"port" envconfig:"PORT"`
 	} `yaml:"server"`
+	LogLevel        string `yaml:"log_level" envconfig:"LOG_LEVEL"`
 	Proxy           string `yaml:"proxy" envconfig:"PROXY"`
 	Http_client_ver int    `yaml:"http_client_version" envconfig:"HTTP_CLIENT_VERSION"`
 	Ipv6_only       bool   `yaml:"ipv6_only" envconfig:"IPV6_ONLY"`
@@ -29,6 +31,10 @@ type config struct {
 }
 
 func LoadConfig() {
+	output := zerolog.ConsoleWriter{Out: os.Stdout, TimeFormat: time.RFC3339}
+	logLevel, _ := zerolog.ParseLevel("trace")
+	logger := zerolog.New(output).With().Timestamp().Logger().Level(logLevel)
+
 	config := &config{
 		Server: struct {
 			Enable_http bool   "yaml:\"enable_http\" envconfig:\"ENABLE_HTTP\""
@@ -46,6 +52,7 @@ func LoadConfig() {
 		Proxy:           "",
 		Http_client_ver: 1,
 		Ipv6_only:       false,
+		LogLevel:        "info",
 		Companion: struct {
 			Secret_key string "yaml:\"secret_key\" envconfig:\"SECRET_KEY\""
 		}{
@@ -53,33 +60,32 @@ func LoadConfig() {
 		},
 	}
 
-	loadConfigFile(config)
-	loadEnv(config)
-	checkConfig(config)
+	loadConfigFile(config, &logger)
+	loadEnv(config, &logger)
+	checkConfig(config, &logger)
 
 	Cfg = config
 }
 
-func checkConfig(config *config) {
-	if len(config.Companion.Secret_key) > 16 {
-		log.Fatalln("The value of 'companion.secret_key' (YTPROXY_SECRET_KEY) needs to be a size of 16 characters.")
+func checkConfig(config *config, logger *zerolog.Logger) {
+	secretKey := config.Companion.Secret_key
+	if len(secretKey) > 16 {
+		logger.Fatal().Str("key", secretKey).Msg("The value of 'companion.secret_key' (YTPROXY_SECRET_KEY) needs to be a size of 16 characters.")
 	}
 }
 
-func loadConfigFile(config *config) {
+func loadConfigFile(config *config, logger *zerolog.Logger) {
 	configPath := "./config/config.yaml"
 	loadConfigPathFromEnv(&configPath)
 
 	configYaml, err := os.ReadFile(configPath)
 	if err != nil {
-		log.Println(err.Error())
-		os.Exit(1)
+		logger.Fatal().Err(err).Msg("failed to read config file")
 	}
 
 	err = yaml.Unmarshal(configYaml, &config)
 	if err != nil {
-		log.Println(err.Error())
-		os.Exit(1)
+		logger.Fatal().Err(err).Msg("failed unmarshal config file, maybe check the syntax of it!")
 	}
 }
 
@@ -90,9 +96,9 @@ func loadConfigPathFromEnv(configPath *string) {
 	}
 }
 
-func loadEnv(config *config) {
+func loadEnv(config *config, logger *zerolog.Logger) {
 	err := envconfig.Process("YTPROXY", config)
 	if err != nil {
-		log.Println(err.Error())
+		logger.Fatal().Err(err).Msg("failed get environment variables for the configuration")
 	}
 }

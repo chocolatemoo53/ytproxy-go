@@ -1,4 +1,4 @@
-package paths
+package routes
 
 import (
 	"io"
@@ -13,5 +13,5 @@ func Root(w http.ResponseWriter, req *http.Request) {
 	Routes:
 	/stats
 	/health`
-	io.WriteString(w, msg)
+	_, _ = io.WriteString(w, msg)
 }

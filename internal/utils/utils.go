@@ -3,12 +3,12 @@ package utils
 import (
 	"crypto/aes"
 	"encoding/base64"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"git.nadeko.net/Fijxu/http3-ytproxy/internal/httpc"
+	"git.nadeko.net/Fijxu/http3-ytproxy/internal/log"
 )
 
 func CopyHeaders(from http.Header, to http.Header, length bool) {
@@ -61,7 +61,7 @@ func GetBestThumbnail(path string) (newpath string) {
 func RelativeUrl(in string) (newurl string) {
 	segment_url, err := url.Parse(in)
 	if err != nil {
-		log.Panic(err)
+		log.Logger.Panic().Err(err).Msg("failed to parse url")
 	}
 	segment_query := segment_url.Query()
 	segment_query.Set("host", segment_url.Hostname())
@@ -72,7 +72,7 @@ func RelativeUrl(in string) (newurl string) {
 
 func PanicHandler(w http.ResponseWriter) {
 	if r := recover(); r != nil {
-		log.Printf("Panic: %v", r)
+		log.Logger.Panic().Any("recover", r).Msg("something panicked!")
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
 }
@@ -81,13 +81,13 @@ func PanicHandler(w http.ResponseWriter) {
 func DecryptQueryParams(encryptedQuery string, key string) (string, error) {
 	se, err := base64.StdEncoding.DecodeString(encryptedQuery)
 	if err != nil {
-		log.Println("[ERROR] Error when decoding base64 string:", err)
+		log.Logger.Error().Err(err).Msg("error when decoding base64 string")
 		return "", err
 	}
 
 	cipher, err := aes.NewCipher([]byte(key)[0:16])
 	if err != nil {
-		log.Println("[ERROR] Error initializating cipher.Block:", err)
+		log.Logger.Error().Err(err).Msg("error initializating cipher.Block")
 		return "", err
 	}
 	decrypted := make([]byte, len(se))

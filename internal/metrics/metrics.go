@@ -61,7 +61,7 @@ var Metrics = metrics{
 	},
 }
 
-func Register() {
+func init() {
 	prometheus.MustRegister(Metrics.Uptime)
 	prometheus.MustRegister(Metrics.ActiveConnections)
 	prometheus.MustRegister(Metrics.IdleConnections)

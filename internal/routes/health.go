@@ -1,4 +1,4 @@
-package paths
+package routes
 
 import (
 	"io"
@@ -7,5 +7,5 @@ import (
 
 func Health(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(200)
-	io.WriteString(w, "OK")
+	_, _ = io.WriteString(w, "OK")
 }

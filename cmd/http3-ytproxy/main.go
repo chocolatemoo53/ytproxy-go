@@ -1,8 +1,8 @@
 package main
 
 import (
+	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -12,8 +12,9 @@ import (
 
 	"git.nadeko.net/Fijxu/http3-ytproxy/internal/config"
 	"git.nadeko.net/Fijxu/http3-ytproxy/internal/httpc"
+	"git.nadeko.net/Fijxu/http3-ytproxy/internal/log"
 	"git.nadeko.net/Fijxu/http3-ytproxy/internal/metrics"
-	"git.nadeko.net/Fijxu/http3-ytproxy/internal/paths"
+	"git.nadeko.net/Fijxu/http3-ytproxy/internal/routes"
 	"git.nadeko.net/Fijxu/http3-ytproxy/internal/utils"
 )
 
@@ -78,44 +79,43 @@ func beforeProxy(next http.HandlerFunc) http.HandlerFunc {
 
 func init() {
 	config.LoadConfig()
+	log.StartLogger()
 }
 
 func main() {
-	log.Printf("[INFO] Current config values: %+v\n", config.Cfg)
+	log.Logger.Trace().Any("config", config.Cfg).Msg("current config values")
+
+	clientVerMsg := func(version string) string {
+		return fmt.Sprintf("using %s Client for /videoplayback requests", version)
+	}
 
 	switch config.Cfg.Http_client_ver {
-	case 1:
-		log.Println("[INFO] Using HTTP/1.1 Client")
-		httpc.Client = httpc.H1_1client
 	case 2:
-		log.Println("[INFO] Using HTTP/2 Client")
+		log.Logger.Info().Msg(clientVerMsg("HTTP/2"))
 		httpc.Client = httpc.H2client
 	case 3:
-		log.Println("[INFO] Using HTTP/3 Client")
+		log.Logger.Info().Msg(clientVerMsg("HTTP/3"))
 		httpc.Client = httpc.H3client
 	default:
-		log.Println("[INFO] Using HTTP/1.1 Client")
+		log.Logger.Info().Msg(clientVerMsg("HTTP/1.1"))
 		httpc.Client = httpc.H1_1client
 	}
 
 	mux := http.NewServeMux()
 
 	// MISC ROUTES
-	mux.HandleFunc("/", beforeMisc(paths.Root))
-	mux.HandleFunc("/health", beforeMisc(paths.Health))
-
-	metrics.Register()
-
-	mux.Handle("/metrics", paths.MetricsHandler())
+	mux.HandleFunc("/", beforeMisc(routes.Root))
+	mux.HandleFunc("/health", beforeMisc(routes.Health))
+	mux.Handle("/metrics", routes.MetricsHandler())
 
 	// PROXY ROUTES
-	mux.HandleFunc("/videoplayback", beforeProxy(paths.Videoplayback))
-	mux.HandleFunc("/vi/", beforeProxy(paths.Vi))
-	mux.HandleFunc("/vi_webp/", beforeProxy(paths.Vi))
-	mux.HandleFunc("/sb/", beforeProxy(paths.Vi))
-	mux.HandleFunc("/ggpht/", beforeProxy(paths.Ggpht))
-	mux.HandleFunc("/a/", beforeProxy(paths.Ggpht))
-	mux.HandleFunc("/ytc/", beforeProxy(paths.Ggpht))
+	mux.HandleFunc("/videoplayback", beforeProxy(routes.Videoplayback))
+	mux.HandleFunc("/vi/", beforeProxy(routes.Vi))
+	mux.HandleFunc("/vi_webp/", beforeProxy(routes.Vi))
+	mux.HandleFunc("/sb/", beforeProxy(routes.Vi))
+	mux.HandleFunc("/ggpht/", beforeProxy(routes.Ggpht))
+	mux.HandleFunc("/a/", beforeProxy(routes.Ggpht))
+	mux.HandleFunc("/ytc/", beforeProxy(routes.Ggpht))
 
 	serverAddress := config.Cfg.Server.Host + ":" + config.Cfg.Server.Port
 	srv := &http.Server{
@@ -132,34 +132,38 @@ func main() {
 		syscall.Unlink(uds_path)
 		socket_listener, err := net.Listen("unix", uds_path)
 		if err != nil {
-			log.Println("[ERROR] Failed to bind to UDS, please check the socket path", err.Error())
+			log.Logger.Error().Err(err).Msg("failed to bind as a unix socket, please check the socket path")
 		}
 
 		defer socket_listener.Close()
 
 		err = os.Chmod(uds_path, 0777)
 		if err != nil {
-			log.Println("[ERROR] Failed to set socket permissions to 777:", err.Error())
+			log.Logger.Error().Err(err).Msg("failed to set socket permissions to 777")
 			return
 		} else {
-			log.Println("[INFO] Setting socket permissions to 777")
+			log.Logger.Info().Msg("setting socket permissions to 777")
 		}
 
 		go func() {
 			err := srv.Serve(socket_listener)
 			if err != nil {
-				log.Println("[ERROR] Failed to listen serve UDS:", err)
+				log.Logger.Error().Err(err).Msg("failed to listen on unix domain socket")
 			}
 		}()
 
 		// To allow everyone to access the socket
-		log.Println("[INFO] Unix socket listening at:", uds_path)
+		log.Logger.Info().Str("unix_socket_path", uds_path).Msg("unix socket listening")
 	}
 
 	if config.Cfg.Server.Enable_http {
-		log.Println("[INFO] Serving HTTP server at port", config.Cfg.Server.Port)
+		port := config.Cfg.Server.Port
+		host := config.Cfg.Server.Host
+
+		log.Logger.Info().Str("port", port).Str("host", host).Msg("starting HTTP server")
 		if err := srv.ListenAndServe(); err != nil {
-			log.Fatalf("[FATAL] Failed to listen on '%s:%s': %s\n", config.Cfg.Server.Host, config.Cfg.Server.Port, err)
+			log.Logger.Fatal().Err(err).Msg("failed to start HTTP server")
 		}
+		log.Logger.Info().Str("port", port).Str("host", host).Msg("HTTP server started!")
 	}
 }

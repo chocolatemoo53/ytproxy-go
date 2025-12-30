@@ -1,13 +1,13 @@
-package paths
+package routes
 
 import (
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"git.nadeko.net/Fijxu/http3-ytproxy/internal/httpc"
+	"git.nadeko.net/Fijxu/http3-ytproxy/internal/log"
 	"git.nadeko.net/Fijxu/http3-ytproxy/internal/metrics"
 	"git.nadeko.net/Fijxu/http3-ytproxy/internal/utils"
 )
@@ -19,19 +19,20 @@ func Ggpht(w http.ResponseWriter, req *http.Request) {
 
 	proxyURL, err := url.Parse("https://" + ggpht_host + path)
 	if err != nil {
-		log.Panic(err)
+		log.Logger.Panic().Err(err).Msg("failed to create proxy URL for /ggpht request")
 	}
 
 	request, err := http.NewRequest(req.Method, proxyURL.String(), nil)
+	if err != nil {
+		log.Logger.Panic().Err(err).Msg("failed to create request")
+	}
+
 	utils.CopyHeaders(req.Header, request.Header, false)
 	request.Header.Set("User-Agent", default_ua)
-	if err != nil {
-		log.Panic(err)
-	}
 
 	resp, err := httpc.Client.Do(request)
 	if err != nil {
-		log.Panic(err)
+		log.Logger.Panic().Err(err).Msg("failed to do request")
 	}
 
 	if err := forbiddenChecker(resp, w); err != nil {
@@ -45,5 +46,5 @@ func Ggpht(w http.ResponseWriter, req *http.Request) {
 	utils.CopyHeaders(resp.Header, w.Header(), NoRewrite)
 	w.WriteHeader(resp.StatusCode)
 
-	io.Copy(w, resp.Body)
+	_, _ = io.Copy(w, resp.Body)
 }
