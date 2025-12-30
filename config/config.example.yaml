@@ -27,6 +27,7 @@ proxy: ""
 http_client_version: 1
 # Only use IPV6 for requests to Youtube
 ipv6_only: false
+log_level: info
 
 companion:
   # 16 characters secret key from Invidious Companion
