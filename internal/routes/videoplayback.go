@@ -141,6 +141,9 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 
 	resp := &http.Response{}
 
+	// https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-p2-semantics-17#section-7.3
+	// A maximum of 5 redirections is defined in the note of the section 7.3
+	// of this RFC, that's why `i < 5`
 	for i := 0; i < 5; i++ {
 		resp, err = httpc.Client.Do(headRequest)
 		if err != nil {
