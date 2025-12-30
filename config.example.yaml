@@ -1,0 +1,33 @@
+# All settings are also available with environment variables!
+# They are all prefixed by `YTPROXY_`
+# Example:
+#   - `YTPROXY_SERVER_ENABLE_HTTP=false`
+#   - `YTPROXY_SERVER_UDS=false`
+#   - `YTPROXY_COMPANION_SECRET_KEY=false`
+
+# Server settings
+server:
+  # HTTP server
+  enable_http: true
+  # Unix sockets server
+  uds: true
+  # Path of the unix socket
+  uds_path: /tmp/http-ytproxy.sock
+  # Listening address for the HTTP server
+  host: 0.0.0.0
+  # Listening port for the HTTP server
+  port: 8080
+
+# Proxy to use for requests for Youtube
+proxy: ""
+# The HTTP client version to use for requests to Youtube
+# 1: HTTP/1.1
+# 2: HTTP/2
+# 3: HTTP/3
+http_client_version: 1
+# Only use IPV6 for requests to Youtube
+ipv6_only: false
+
+companion:
+  # 16 characters secret key from Invidious Companion
+  secret_key: ""
