@@ -80,12 +80,16 @@ func loadConfigFile(config *config, logger *zerolog.Logger) {
 
 	configYaml, err := os.ReadFile(configPath)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to read config file")
+		logger.Error().Err(err).Msg("failed to read config file, using default config")
+		logger.Error().Msg("if you are using environment variables, you can ignore this error!")
+		return
 	}
 
 	err = yaml.Unmarshal(configYaml, &config)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("failed unmarshal config file, maybe check the syntax of it!")
+		logger.Warn().Err(err).Msg("failed unmarshal config file, maybe check the syntax of it!. using default config")
+		logger.Error().Msg("if you are using environment variables, you can ignore this error!")
+		return
 	}
 }
 
