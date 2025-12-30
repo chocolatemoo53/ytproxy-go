@@ -31,7 +31,7 @@ var allowed_hosts = []string{
 	"googleusercontent.com",
 }
 
-var videoplayback_headers = &http.Header{
+var defaultHeaders = http.Header{
 	"Accept":          {"*/*"},
 	"Accept-Encoding": {"gzip, deflate, br, zstd"},
 	"Accept-Language": {"en-us,en;q=0.5"},
