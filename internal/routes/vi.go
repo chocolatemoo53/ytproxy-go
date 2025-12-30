@@ -39,7 +39,7 @@ func Vi(w http.ResponseWriter, req *http.Request) {
 		log.Logger.Panic().Err(err).Msg("failed to create request")
 	}
 
-	request.Header.Set("User-Agent", default_ua)
+	request.Header.Set("User-Agent", constants.DefaultUa)
 
 	resp, err := httpc.Client.Do(request)
 	if err != nil {

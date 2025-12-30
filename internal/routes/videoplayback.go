@@ -72,6 +72,19 @@ func checkRequest(w http.ResponseWriter, req *http.Request, params url.Values) b
 	return false
 }
 
+func setUserAgent(headers *http.Header, youtubeClient string) {
+	if youtubeClient == "ANDROID" {
+		log.Logger.Trace().Msg("ANDROID user agent set for this request")
+		headers.Set("User-Agent", constants.AndroidUserAgent)
+	} else if youtubeClient == "IOS" {
+		log.Logger.Trace().Msg("IOS user agent set for this request")
+		headers.Set("User-Agent", constants.IosUserAgent)
+	} else {
+		log.Logger.Trace().Msg("default user agent set for this request")
+		return
+	}
+}
+
 func Videoplayback(w http.ResponseWriter, req *http.Request) {
 	q := req.URL.Query()
 
@@ -86,7 +99,9 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 
 		err = json.Unmarshal([]byte(decryptedQueryParams), &structuredDecryptedQueryParams)
 		if err != nil {
-			http.Error(w, "Internal Server Error:\nFailed to parse query parameters from the decrypted query parameters", http.StatusInternalServerError)
+			msg := "failed to parse query parameters from decrypted query parameters"
+			log.Logger.Error().Err(err).Msg(msg)
+			http.Error(w, msg, http.StatusInternalServerError)
 			return
 		}
 
@@ -99,6 +114,7 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if checkRequest(w, req, q) {
+		log.Logger.Debug().Msg("request didn't met required checks, closing")
 		return
 	}
 
@@ -135,6 +151,9 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 	if err != nil {
 		log.Logger.Panic().Err(err).Msg("failed to create HEAD request")
 	}
+
+	youtubeClient := q.Get("c")
+	setUserAgent(videoplayback_headers, youtubeClient)
 
 	postRequest.Header = *videoplayback_headers
 	headRequest.Header = *videoplayback_headers

@@ -17,7 +17,7 @@ func Ggpht(w http.ResponseWriter, req *http.Request) {
 	path = strings.Replace(path, "/ggpht", "", 1)
 	path = strings.Replace(path, "/i/", "/", 1)
 
-	proxyURL, err := url.Parse("https://" + ggpht_host + path)
+	proxyURL, err := url.Parse("https://" + constants.GgphtHost + path)
 	if err != nil {
 		log.Logger.Panic().Err(err).Msg("failed to create proxy URL for /ggpht request")
 	}
@@ -28,7 +28,7 @@ func Ggpht(w http.ResponseWriter, req *http.Request) {
 	}
 
 	utils.CopyHeaders(req.Header, request.Header, false)
-	request.Header.Set("User-Agent", default_ua)
+	request.Header.Set("User-Agent", constants.DefaultUa)
 
 	resp, err := httpc.Client.Do(request)
 	if err != nil {
