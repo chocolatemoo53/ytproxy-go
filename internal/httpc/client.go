@@ -36,7 +36,7 @@ var H1_1client = &http.Client{
 			if config.Cfg.Ipv6_only {
 				net = "tcp6"
 			} else {
-				net = "tcp4"
+				net = "tcp"
 			}
 			return dialer.Dial(net, addr)
 		},
