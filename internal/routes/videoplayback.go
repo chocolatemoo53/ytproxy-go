@@ -169,7 +169,8 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 
 	youtubeClient := q.Get("c")
 
-	videoplaybackHeaders := defaultHeaders
+	videoplaybackHeaders := defaultHeaders.Clone()
+	log.Logger.Trace().Any("headers", videoplaybackHeaders).Msg("setting default headers for /videoplayback request")
 	setUserAgent(&videoplaybackHeaders, youtubeClient)
 	postRequest.Header = videoplaybackHeaders
 	headRequest.Header = videoplaybackHeaders
