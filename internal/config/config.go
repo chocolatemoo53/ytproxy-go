@@ -67,7 +67,7 @@ func checkConfig(config *config) {
 }
 
 func loadConfigFile(config *config) {
-	configPath := "./config.yaml"
+	configPath := "./config/config.yaml"
 	loadConfigPathFromEnv(&configPath)
 
 	configYaml, err := os.ReadFile(configPath)
