@@ -85,32 +85,47 @@ func setUserAgent(headers *http.Header, youtubeClient string) {
 	}
 }
 
+func processDecryptedQueryParams(structuredDecryptedQueryParams *[][]string, q *url.Values) {
+	log.Logger.Debug().Msg("processing decrypted query parameters")
+	for _, value := range *structuredDecryptedQueryParams {
+		paramName := value[0]
+		paramValue := value[1]
+		log.Logger.Trace().Str(paramName, paramValue).Msg("setting decrypted query parameters")
+		q.Set(value[0], value[1])
+	}
+}
+
 func Videoplayback(w http.ResponseWriter, req *http.Request) {
 	q := req.URL.Query()
 
 	if q.Get("enc") == "true" {
-		decryptedQueryParams, err := utils.DecryptQueryParams(req.URL.Query().Get("data"), config.Cfg.Companion.Secret_key)
+		encryptedData := q.Get("data")
+		decryptedQueryParams, err := utils.DecryptQueryParams(encryptedData, config.Cfg.Companion.Secret_key)
 		if err != nil {
-			http.Error(w, "Internal Server Error:\nFailed to decrypt query parameters", http.StatusInternalServerError)
+			msg := "failed to decrypt query parameters"
+			log.Logger.Error().Err(err).Msg(msg)
+			http.Error(w, msg, http.StatusInternalServerError)
 			return
+		} else {
+			log.Logger.Trace().Str("decryptedQueryParams", decryptedQueryParams).Msg("successfully decrypted the encrypted query parameters")
 		}
 
 		var structuredDecryptedQueryParams [][]string
 
 		err = json.Unmarshal([]byte(decryptedQueryParams), &structuredDecryptedQueryParams)
 		if err != nil {
-			msg := "failed to parse query parameters from decrypted query parameters"
+			msg := "failed to parse decrypted query parameters"
 			log.Logger.Error().Err(err).Msg(msg)
 			http.Error(w, msg, http.StatusInternalServerError)
 			return
+		} else {
+			log.Logger.Trace().Any("structuredDecryptedQueryParams", &structuredDecryptedQueryParams).Msg("successfully parsed decrypted query parameters")
 		}
 
-		pot := structuredDecryptedQueryParams[1][1]
-		ip := structuredDecryptedQueryParams[0][1]
 		q.Del("enc")
 		q.Del("data")
-		q.Set("pot", pot)
-		q.Set("ip", ip)
+
+		processDecryptedQueryParams(&structuredDecryptedQueryParams, &q)
 	}
 
 	if checkRequest(w, req, q) {
