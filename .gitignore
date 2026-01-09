@@ -23,3 +23,6 @@
 *.key
 
 config.yaml
+
+# `nix build` result builds
+.result

@@ -12,14 +12,20 @@
       nixpkgs,
       flake-utils,
     }:
-    flake-utils.lib.eachSystem [ "x86_64-linux" ] (
+    let
+      supportSystems = [
+        "aarch64-linux"
+        "x86_64-linux"
+      ];
+    in
+    flake-utils.lib.eachSystem supportSystems (
       system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
       in
       {
         packages = {
-          default = pkgs.callPackage ./package.nix { };
+          default = pkgs.callPackage ./dist/nix/package.nix { };
         };
 
         devShells.default = pkgs.mkShell {
@@ -35,6 +41,6 @@
       }
     )
     // {
-      nixosModules.default = import ./module.nix self;
+      nixosModules.default = import ./dist/nix/module.nix self;
     };
 }
