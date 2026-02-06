@@ -3,6 +3,6 @@
 buildGoModule rec {
   pname = "http3-ytproxy";
   version = "0.1.0";
-  vendorHash = "sha256-wXbDKE+MlsFa5gDOBSLUodzFP6k2rDK2YpR0ggCGv4E=";
-  src = ./.;
+  vendorHash = "sha256-JMHXL+bLilc0y9ZJZ7Mbd7HpqrQMCJLfw6Ob5/g4fMk=";
+  src = ./../../.;
 }
