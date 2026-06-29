@@ -1,5 +1,5 @@
 {
-  description = "http3-ytproxy NixOS Flake";
+  description = "ytproxy-go NixOS Flake";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";

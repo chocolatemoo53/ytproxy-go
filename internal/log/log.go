@@ -4,7 +4,7 @@ import (
 	"os"
 	"time"
 
-	"git.nadeko.net/Fijxu/http3-ytproxy/internal/config"
+	"git.nadeko.net/Fijxu/ytproxy-go/internal/config"
 	"github.com/rs/zerolog"
 )
 

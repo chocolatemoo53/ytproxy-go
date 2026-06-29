@@ -11,11 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"git.nadeko.net/Fijxu/http3-ytproxy/internal/config"
-	"git.nadeko.net/Fijxu/http3-ytproxy/internal/httpc"
-	"git.nadeko.net/Fijxu/http3-ytproxy/internal/log"
-	"git.nadeko.net/Fijxu/http3-ytproxy/internal/metrics"
-	"git.nadeko.net/Fijxu/http3-ytproxy/internal/utils"
+	"git.nadeko.net/Fijxu/ytproxy-go/internal/config"
+	"git.nadeko.net/Fijxu/ytproxy-go/internal/httpc"
+	"git.nadeko.net/Fijxu/ytproxy-go/internal/log"
+	"git.nadeko.net/Fijxu/ytproxy-go/internal/metrics"
+	"git.nadeko.net/Fijxu/ytproxy-go/internal/utils"
 )
 
 func forbiddenChecker(resp *http.Response, w http.ResponseWriter) error {

@@ -7,7 +7,7 @@ import (
 	"net/url"
 	"time"
 
-	"git.nadeko.net/Fijxu/http3-ytproxy/internal/config"
+	"git.nadeko.net/Fijxu/ytproxy-go/internal/config"
 	"github.com/quic-go/quic-go/http3"
 )
 

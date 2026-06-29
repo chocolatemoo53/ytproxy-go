@@ -1,9 +1,9 @@
-# Docker compose file for http3-ytproxy used in inv.nadeko.net
+# Docker compose file for ytproxy-go used in inv.nadeko.net
 
 services:
   http3-proxy:
     build: .
-    image: git.nadeko.net/fijxu/http3-ytproxy:latest
+    image: git.nadeko.net/fijxu/ytproxy-go:latest
     restart: always
     # Uncomment this IF YOU ARE using gluetun!
     # network_mode: "service:gluetun"
@@ -19,7 +19,7 @@ services:
       gluetun:
         condition: service_healthy
     # Needed for HTTP/3, otherwise, quic-go will output this depending of the machine:
-    # "failed to sufficiently increase receive buffer size (was: 208 kiB, wanted: 7168 kiB, got: 416 kiB). 
+    # "failed to sufficiently increase receive buffer size (was: 208 kiB, wanted: 7168 kiB, got: 416 kiB).
     # See https://github.com/quic-go/quic-go/wiki/UDP-Buffer-Sizes for details."
     cap_add:
       - NET_ADMIN

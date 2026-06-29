@@ -45,7 +45,7 @@ func LoadConfig() {
 		}{
 			Enable_http: true,
 			Uds:         true,
-			Uds_path:    "/tmp/http-ytproxy.sock",
+			Uds_path:    "/tmp/ytproxy-go.sock",
 			Host:        "0.0.0.0",
 			Port:        "8080",
 		},

@@ -10,12 +10,12 @@ import (
 	"syscall"
 	"time"
 
-	"git.nadeko.net/Fijxu/http3-ytproxy/internal/config"
-	"git.nadeko.net/Fijxu/http3-ytproxy/internal/httpc"
-	"git.nadeko.net/Fijxu/http3-ytproxy/internal/log"
-	"git.nadeko.net/Fijxu/http3-ytproxy/internal/metrics"
-	"git.nadeko.net/Fijxu/http3-ytproxy/internal/routes"
-	"git.nadeko.net/Fijxu/http3-ytproxy/internal/utils"
+	"git.nadeko.net/Fijxu/ytproxy-go/internal/config"
+	"git.nadeko.net/Fijxu/ytproxy-go/internal/httpc"
+	"git.nadeko.net/Fijxu/ytproxy-go/internal/log"
+	"git.nadeko.net/Fijxu/ytproxy-go/internal/metrics"
+	"git.nadeko.net/Fijxu/ytproxy-go/internal/routes"
+	"git.nadeko.net/Fijxu/ytproxy-go/internal/utils"
 )
 
 type ConnectionWatcher struct {
@@ -59,7 +59,7 @@ func beforeProxy(next http.HandlerFunc) http.HandlerFunc {
 		w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
 		w.Header().Set("Access-Control-Max-Age", "1728000")
 		w.Header().Set("Strict-Transport-Security", "max-age=86400")
-		w.Header().Set("X-Powered-By", "http3-ytproxy "+version+"-"+runtime.GOARCH)
+		w.Header().Set("X-Powered-By", "ytproxy-go "+version+"-"+runtime.GOARCH)
 
 		if req.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)

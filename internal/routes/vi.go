@@ -6,16 +6,15 @@ import (
 	"net/url"
 	"strings"
 
-	"git.nadeko.net/Fijxu/http3-ytproxy/internal/httpc"
-	"git.nadeko.net/Fijxu/http3-ytproxy/internal/log"
-	"git.nadeko.net/Fijxu/http3-ytproxy/internal/metrics"
-	"git.nadeko.net/Fijxu/http3-ytproxy/internal/utils"
+	"git.nadeko.net/Fijxu/ytproxy-go/internal/httpc"
+	"git.nadeko.net/Fijxu/ytproxy-go/internal/log"
+	"git.nadeko.net/Fijxu/ytproxy-go/internal/metrics"
+	"git.nadeko.net/Fijxu/ytproxy-go/internal/utils"
 )
 
 func Vi(w http.ResponseWriter, req *http.Request) {
 	const host string = "i.ytimg.com"
 	q := req.URL.Query()
-
 	path := req.URL.EscapedPath()
 
 	proxyURL, err := url.Parse("https://" + host + path)

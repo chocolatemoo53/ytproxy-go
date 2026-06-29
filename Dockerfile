@@ -19,10 +19,10 @@ RUN apk add --no-cache libwebp
 
 WORKDIR /app/
 
-COPY --from=build /app/http3-ytproxy /app/http3-ytproxy
+COPY --from=build /app/ytproxy-go /app/ytproxy-go
 COPY --from=build /app/config/config.example.yaml /app/config/config.yaml
 
 # Switch to non-privileged user
 USER appuser
 
-ENTRYPOINT ["/app/http3-ytproxy"]
+ENTRYPOINT ["/app/ytproxy-go"]

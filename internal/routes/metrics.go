@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"git.nadeko.net/Fijxu/http3-ytproxy/internal/metrics"
+	"git.nadeko.net/Fijxu/ytproxy-go/internal/metrics"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 

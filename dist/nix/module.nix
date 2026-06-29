@@ -6,42 +6,42 @@ self:
   ...
 }:
 let
-  cfg = config.services.http3-ytproxy;
+  cfg = config.services.ytproxy-go;
   # Import the package from the flake
   settingsFormat = pkgs.formats.json { };
-  settingsFile = settingsFormat.generate "http3-ytproxy-settings.yaml" cfg.settings;
+  settingsFile = settingsFormat.generate "ytproxy-go-settings.yaml" cfg.settings;
 
-  http3-ytproxy = self.packages.${pkgs.system}.default;
+  ytproxy-go = self.packages.${pkgs.system}.default;
 in
 {
-  options.services.http3-ytproxy = {
-    enable = lib.mkEnableOption "Enable http3-ytproxy service.";
+  options.services.ytproxy-go = {
+    enable = lib.mkEnableOption "Enable ytproxy-go service.";
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = http3-ytproxy;
-      description = "The http3-ytproxy package to use.";
+      default = ytproxy-go;
+      description = "The ytproxy-go package to use.";
     };
 
     user = lib.mkOption {
       type = lib.types.str;
-      default = "http3-ytproxy";
-      description = "User account under which http3-ytproxy runs.";
+      default = "ytproxy-go";
+      description = "User account under which ytproxy-go runs.";
     };
 
     group = lib.mkOption {
       type = lib.types.str;
-      default = "http3-ytproxy";
-      description = "Group under which http3-ytproxy runs.";
+      default = "ytproxy-go";
+      description = "Group under which ytproxy-go runs.";
     };
 
     settings = lib.mkOption {
       type = settingsFormat.type;
       default = { };
       description = ''
-        The settings http3-ytproxy should use.
+        The settings ytproxy-go should use.
 
-        See [config.example.yaml](https://git.nadeko.net/Fijxu/http3-ytproxy/src/branch/master/config/config.example.yaml) for a list of all possible options.
+        See [config.example.yaml](https://git.nadeko.net/Fijxu/ytproxy-go/src/branch/master/config/config.example.yaml) for a list of all possible options.
       '';
     };
   };
@@ -53,7 +53,7 @@ in
   #           enableHttp = lib.mkOption {
   #             type = lib.types.bool;
   #             default = true;
-  #             description = "Enables the http server of http3-ytproxy";
+  #             description = "Enables the http server of ytproxy-go";
   #           };
   #           unixSocket = lib.mkOption {
   #             type = lib.types.bool;
@@ -62,7 +62,7 @@ in
   #           };
   #           unixSocketPath = lib.mkOption {
   #             type = lib.types.string;
-  #             default = "/tmp/http-ytproxy.sock";
+  #             default = "/tmp/ytproxy-go.sock";
   #             description = "Path of the unix socket";
   #           };
   #           host = lib.mkOption {
@@ -114,24 +114,24 @@ in
   #       };
   #     };
   #     default = { };
-  #     description = "The http3-ytproxy config";
+  #     description = "The ytproxy-go config";
   #   };
   # };
 
   config = lib.mkIf cfg.enable {
-    users.users = lib.mkIf (cfg.user == "http3-ytproxy") {
-      http3-ytproxy = {
-        description = "http3-ytproxy user";
+    users.users = lib.mkIf (cfg.user == "ytproxy-go") {
+      ytproxy-go = {
+        description = "ytproxy-go user";
         isSystemUser = true;
         group = cfg.group;
       };
     };
 
-    users.groups = lib.mkIf (cfg.group == "http3-ytproxy") {
-      http3-ytproxy = { };
+    users.groups = lib.mkIf (cfg.group == "ytproxy-go") {
+      ytproxy-go = { };
     };
 
-    systemd.services.http3-ytproxy = {
+    systemd.services.ytproxy-go = {
       description = "Youtube /videoplayback proxy";
       wants = [ "network-online.target" ];
       after = [ "network-online.target" ];
@@ -142,7 +142,7 @@ in
       };
 
       serviceConfig = {
-        ExecStart = "${cfg.package}/bin/http3-ytproxy";
+        ExecStart = "${cfg.package}/bin/ytproxy-go";
         DynamicUser = true;
         User = cfg.user;
         Group = cfg.group;

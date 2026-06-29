@@ -12,7 +12,7 @@ server:
   # Unix sockets server
   uds: true
   # Path of the unix socket
-  uds_path: /tmp/http-ytproxy.sock
+  uds_path: /tmp/ytproxy-go.sock
   # Listening address for the HTTP server
   host: 0.0.0.0
   # Listening port for the HTTP server

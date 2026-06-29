@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"strings"
 
-	"git.nadeko.net/Fijxu/http3-ytproxy/internal/httpc"
-	"git.nadeko.net/Fijxu/http3-ytproxy/internal/log"
+	"git.nadeko.net/Fijxu/ytproxy-go/internal/httpc"
+	"git.nadeko.net/Fijxu/ytproxy-go/internal/log"
 )
 
 func CopyHeaders(from http.Header, to http.Header, length bool) {
