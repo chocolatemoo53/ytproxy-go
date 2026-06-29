@@ -116,6 +116,15 @@ func main() {
 	mux.HandleFunc("/ggpht/", beforeProxy(routes.Ggpht))
 	mux.HandleFunc("/a/", beforeProxy(routes.Ggpht))
 	mux.HandleFunc("/ytc/", beforeProxy(routes.Ggpht))
+	// The 3 Handles bellow use the same logic as `s_p` thumbnails.
+	// Reference: https://github.com/iv-org/invidious/pull/5742
+	//
+	// Thumbnails used somewhere in Youtube, I have no idea where this is actually used.
+	mux.HandleFunc("/s_p/", beforeProxy(routes.S_p("i9")))
+	// Thumbnails used in some Youtube playlists.
+	mux.HandleFunc("/tvfilm_banner/", beforeProxy(routes.S_p("i")))
+	// Thumbnails used in some Youtube podcasts (a form of a Youtube playlist).
+	mux.HandleFunc("/pl_c/", beforeProxy(routes.S_p("i")))
 
 	serverAddress := config.Cfg.Server.Host + ":" + config.Cfg.Server.Port
 	srv := &http.Server{
