@@ -1,4 +1,4 @@
-FROM mirror.gcr.io/golang:alpine3.23 AS build
+FROM mirror.gcr.io/golang:alpine3.24 AS build
 
 WORKDIR /app/
 RUN go env -w GOMODCACHE=/root/.cache/go-build
@@ -11,7 +11,7 @@ COPY . .
 RUN  --mount=type=cache,target=/root/.cache/go-build \
     make build
 
-FROM mirror.gcr.io/alpine:3.23
+FROM mirror.gcr.io/alpine:3.24
 
 RUN adduser -u 10001 -S appuser
 
