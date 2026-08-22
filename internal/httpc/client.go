@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"git.nadeko.net/Fijxu/ytproxy-go/internal/config"
+	"git.nadeko.net/Fijxu/ytproxy-go/internal/log"
 	"github.com/quic-go/quic-go/http3"
 )
 
@@ -20,9 +21,35 @@ var dialer = &net.Dialer{
 
 // QUIC doesn't seem to support HTTP nor SOCKS5 proxies due to how it's made.
 // (Since it's UDP)
+//
+// However, SOCKS5 UDP ASSOCIATE (RFC 1928 §7) turns a proxy into a generic
+// UDP relay, which is enough to carry QUIC. NewH3Client wires that up via
+// the http3.Transport.Dial hook when a socks5:// proxy is configured.
+//
+// NOTE: no overall client timeout on purpose; Client.Timeout also caps the
+// time spent streaming the response body, which would abort long
+// /videoplayback transfers mid-stream.
 var H3client = &http.Client{
 	Transport: &http3.Transport{},
-	Timeout:   10 * time.Second,
+}
+
+// NewH3Client builds the HTTP/3 client, routing through a SOCKS5 proxy's
+// UDP relay when config.Cfg.Proxy is set.
+func NewH3Client() *http.Client {
+	t := &http3.Transport{}
+	if config.Cfg.Proxy != "" {
+		if u, err := url.Parse(config.Cfg.Proxy); err == nil && u.Host != "" {
+			switch u.Scheme {
+			case "socks5", "socks5h":
+				t.Dial = socks5UDPProxyDial(u.Host)
+			default:
+				log.Logger.Warn().Str("scheme", u.Scheme).Msg("HTTP/3 mode only supports socks5:// proxies, ignoring proxy setting")
+			}
+		}
+	}
+	return &http.Client{
+		Transport: t,
+	}
 }
 
 // http/1.1 client

@@ -83,7 +83,7 @@ func main() {
 		httpc.Client = httpc.H2client
 	case 3:
 		log.Logger.Info().Msg(clientVerMsg("HTTP/3"))
-		httpc.Client = httpc.H3client
+		httpc.Client = httpc.NewH3Client()
 	default:
 		log.Logger.Info().Msg(clientVerMsg("HTTP/1.1"))
 		httpc.Client = httpc.H1_1client
