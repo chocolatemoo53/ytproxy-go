@@ -25,4 +25,13 @@
 config.yaml
 
 # `nix build` result builds
-.result
+result
+
+# direnv
+.direnv
+
+# vscode
+.vscode
+
+# zed
+.zed
