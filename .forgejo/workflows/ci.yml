@@ -4,6 +4,15 @@ on:
   workflow_dispatch:
   push:
     branches: ["main", "master"]
+    paths-ignore:
+      - LICENCE
+      - "*.md"
+      - "renovate.json"
+      - .git*
+      - .editorconfig
+      - "*.nix"
+      - flake.lock
+      - docker-compose.yml
 
 jobs:
   build:
