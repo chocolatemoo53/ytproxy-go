@@ -36,6 +36,7 @@
             nix
             nixfmt
             nil
+            nix-update
           ];
         };
       }
