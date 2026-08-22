@@ -22,13 +22,10 @@ func Ggpht(w http.ResponseWriter, req *http.Request) {
 		log.Logger.Panic().Err(err).Msg("failed to create proxy URL for /ggpht request")
 	}
 
-	request, err := http.NewRequest(req.Method, proxyURL.String(), nil)
+	request, err := newProxyRequest(req, proxyURL.String(), nil)
 	if err != nil {
 		log.Logger.Panic().Err(err).Msg("failed to create request")
 	}
-
-	utils.CopyHeaders(req.Header, request.Header, false)
-	request.Header.Set("User-Agent", constants.DefaultUa)
 
 	resp, err := httpc.Client.Do(request)
 	if err != nil {

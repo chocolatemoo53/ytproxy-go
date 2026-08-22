@@ -104,27 +104,25 @@ func main() {
 	mux := http.NewServeMux()
 
 	// MISC ROUTES
-	mux.HandleFunc("/", beforeMisc(routes.Root))
-	mux.HandleFunc("/health", beforeMisc(routes.Health))
-	mux.Handle("/metrics", routes.MetricsHandler())
+	mux.HandleFunc("GET /", beforeMisc(routes.Root))
+	mux.HandleFunc("GET /health", beforeMisc(routes.Health))
+	mux.Handle("GET /metrics", routes.MetricsHandler())
 
 	// PROXY ROUTES
-	mux.HandleFunc("/videoplayback", beforeProxy(routes.Videoplayback))
-	mux.HandleFunc("/vi/", beforeProxy(routes.Vi))
-	mux.HandleFunc("/vi_webp/", beforeProxy(routes.Vi))
-	mux.HandleFunc("/sb/", beforeProxy(routes.Vi))
-	mux.HandleFunc("/ggpht/", beforeProxy(routes.Ggpht))
-	mux.HandleFunc("/a/", beforeProxy(routes.Ggpht))
-	mux.HandleFunc("/ytc/", beforeProxy(routes.Ggpht))
+	mux.HandleFunc("GET /videoplayback", beforeProxy(routes.Videoplayback))
+	mux.HandleFunc("GET /vi/{id}/{name}", beforeProxy(routes.Vi))
+	mux.HandleFunc("GET /vi_webp/{id}/{name}", beforeProxy(routes.Vi))
+	mux.HandleFunc("GET /sb/{authority}/{id}/{storyboard}/{index}", beforeProxy(routes.Storyboards))
+	mux.HandleFunc("GET /ggpht/", beforeProxy(routes.Ggpht))
 	// The 3 Handles bellow use the same logic as `s_p` thumbnails.
 	// Reference: https://github.com/iv-org/invidious/pull/5742
 	//
 	// Thumbnails used somewhere in Youtube, I have no idea where this is actually used.
-	mux.HandleFunc("/s_p/", beforeProxy(routes.S_p("i9")))
+	mux.HandleFunc("GET /s_p/{id}/{name}", beforeProxy(routes.S_p("i9")))
 	// Thumbnails used in some Youtube playlists.
-	mux.HandleFunc("/tvfilm_banner/", beforeProxy(routes.S_p("i")))
+	mux.HandleFunc("GET /tvfilm_banner/{id}/{name}", beforeProxy(routes.S_p("i")))
 	// Thumbnails used in some Youtube podcasts (a form of a Youtube playlist).
-	mux.HandleFunc("/pl_c/", beforeProxy(routes.S_p("i")))
+	mux.HandleFunc("GET /pl_c/{id}/{name}", beforeProxy(routes.S_p("i")))
 
 	serverAddress := config.Cfg.Server.Host + ":" + config.Cfg.Server.Port
 	srv := &http.Server{

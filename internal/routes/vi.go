@@ -1,10 +1,10 @@
 package routes
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 
 	"git.nadeko.net/Fijxu/ytproxy-go/internal/httpc"
 	"git.nadeko.net/Fijxu/ytproxy-go/internal/log"
@@ -14,31 +14,22 @@ import (
 
 func Vi(w http.ResponseWriter, req *http.Request) {
 	const host string = "i.ytimg.com"
-	q := req.URL.Query()
-	path := req.URL.EscapedPath()
+	id := req.PathValue("id")
+	name := req.PathValue("name")
 
-	proxyURL, err := url.Parse("https://" + host + path)
+	proxyURL, err := url.Parse(fmt.Sprintf("https://%s/vi/%s/%s", host, id, name))
 	if err != nil {
 		log.Logger.Panic().Err(err).Msg("failed to create proxy URL for /vi request")
 	}
 
-	if strings.HasSuffix(proxyURL.EscapedPath(), "maxres.jpg") {
+	if name == "maxres.jpg" {
 		proxyURL.Path = utils.GetBestThumbnail(proxyURL.EscapedPath())
 	}
 
-	/*
-		Required for /sb/ endpoints
-		You can't access https://i.ytimg.com/sb/<VIDEOID>/storyboard3_L2/M3.jpg
-		without it's parameters `sqp` and `sigh`
-	*/
-	proxyURL.RawQuery = q.Encode()
-
-	request, err := http.NewRequest(req.Method, proxyURL.String(), nil)
+	request, err := newProxyRequest(req, proxyURL.String(), nil)
 	if err != nil {
 		log.Logger.Panic().Err(err).Msg("failed to create request")
 	}
-
-	request.Header.Set("User-Agent", constants.DefaultUa)
 
 	resp, err := httpc.Client.Do(request)
 	if err != nil {

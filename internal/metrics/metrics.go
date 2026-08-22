@@ -14,6 +14,7 @@ type metrics struct {
 	RequestForbidden       struct {
 		Videoplayback prometheus.Counter
 		Vi            prometheus.Counter
+		Storyboards   prometheus.Counter
 		Ggpht         prometheus.Counter
 	}
 }
@@ -47,6 +48,7 @@ var Metrics = metrics{
 	RequestForbidden: struct {
 		Videoplayback prometheus.Counter
 		Vi            prometheus.Counter
+		Storyboards   prometheus.Counter
 		Ggpht         prometheus.Counter
 	}{
 		Videoplayback: prometheus.NewCounter(prometheus.CounterOpts{
@@ -54,6 +56,9 @@ var Metrics = metrics{
 		}),
 		Vi: prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "http3_ytproxy_request_forbidden_vi",
+		}),
+		Storyboards: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "http3_ytproxy_request_forbidden_storyboards",
 		}),
 		Ggpht: prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "http3_ytproxy_request_forbidden_ggpht",
@@ -72,5 +77,6 @@ func init() {
 	prometheus.MustRegister(Metrics.RequestPerMinute)
 	prometheus.MustRegister(Metrics.RequestForbidden.Videoplayback)
 	prometheus.MustRegister(Metrics.RequestForbidden.Vi)
+	prometheus.MustRegister(Metrics.RequestForbidden.Storyboards)
 	prometheus.MustRegister(Metrics.RequestForbidden.Ggpht)
 }
