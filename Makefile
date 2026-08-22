@@ -1,6 +1,6 @@
 .PHONY: run build
 
-VERSION = $(date '+%Y-%m-%d')-$(git rev-list --abbrev-commit -1 HEAD)
+VERSION = $(shell date '+%Y-%m-%d')-$(shell git rev-list --abbrev-commit -1 HEAD)
 
 build:
 	CGO_ENABLED=0 go build -ldflags "-X 'main.version=$(VERSION)'" ./cmd/ytproxy-go
