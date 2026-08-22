@@ -170,7 +170,8 @@ func socks5UDPAssociate(ctx context.Context, proxyAddr, target string) (*socksUD
 	}
 
 	// UDP ASSOCIATE with wildcard target.
-	if _, err := control.Write([]byte{0x05, 0x03, 0x00, 0x00, 0x01, 0, 0, 0, 0, 0, 0}); err != nil {
+	// VER CMD RSV ATYP(IPv4) ADDR(4×0) PORT(2×0) — exactly 10 bytes.
+	if _, err := control.Write([]byte{0x05, 0x03, 0x00, 0x01, 0, 0, 0, 0, 0, 0}); err != nil {
 		return fail("socks5: sending UDP ASSOCIATE: %w", err)
 	}
 	reply := make([]byte, 262)
