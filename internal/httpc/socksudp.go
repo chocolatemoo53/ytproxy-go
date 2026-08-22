@@ -217,6 +217,23 @@ func socks5UDPAssociate(ctx context.Context, proxyAddr, target string) (*socksUD
 	if err != nil {
 		return fail("socks5: resolving relay %s: %w", relayHost, err)
 	}
+
+	// Keep the target address family compatible with the relay: a v4-only
+	// relay cannot forward datagrams addressed to a literal IPv6 target
+	// (e.g. googlevideo's AAAA), which would blackhole QUIC silently.
+	// Re-resolve the target hostname for IPv4 in that case.
+	if relay.IP.To4() != nil && targetAddr.IP != nil && targetAddr.IP.To4() == nil {
+		host, portStr, splitErr := net.SplitHostPort(target)
+		if splitErr == nil && net.ParseIP(host) == nil {
+			ips, lookupErr := net.DefaultResolver.LookupIP(ctx, "ip4", host)
+			if lookupErr != nil || len(ips) == 0 {
+				return fail("socks5: v4 relay but target %s has no A record: %v", host, lookupErr)
+			}
+			port, _ := strconv.Atoi(portStr)
+			targetAddr = &net.UDPAddr{IP: ips[0], Port: port}
+		}
+	}
+
 	udp, err := net.ListenUDP("udp", &net.UDPAddr{})
 	if err != nil {
 		return fail("socks5: binding local UDP socket: %w", err)
