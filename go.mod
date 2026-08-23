@@ -8,6 +8,7 @@ require (
 	github.com/quic-go/quic-go v0.61.0
 	github.com/rs/zerolog v1.35.1
 	gopkg.in/yaml.v2 v2.4.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
