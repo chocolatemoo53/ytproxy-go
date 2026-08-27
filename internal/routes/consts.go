@@ -16,12 +16,14 @@ var constants = struct {
 	AndroidUserAgent string
 	WebUserAgent     string
 	IosUserAgent     string
+	TvUserAgent      string
 }{
 	DefaultUa:        defaultUa,
 	GgphtHost:        "yt3.ggpht.com",
 	AndroidUserAgent: "com.google.android.youtube/1537338816 (Linux; U; Android 13; en_US; ; Build/TQ2A.230505.002; Cronet/113.0.5672.24)",
 	WebUserAgent:     defaultUa,
 	IosUserAgent:     "com.google.ios.youtube/19.32.8 (iPhone14,5; U; CPU iOS 17_6 like Mac OS X;)",
+	TvUserAgent:      "Mozilla/5.0 (SMART-TV; Linux; Tizen 4.0.0.2) AppleWebkit/605.1.15 (KHTML, like Gecko) SamsungBrowser/9.2 TV Safari/605.1.15",
 }
 
 func newProxyRequest(req *http.Request, proxyURL string, body io.Reader) (*http.Request, error) {

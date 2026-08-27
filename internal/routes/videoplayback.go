@@ -79,6 +79,9 @@ func setUserAgent(headers *http.Header, youtubeClient string) {
 	} else if youtubeClient == "IOS" {
 		log.Logger.Trace().Msg("IOS user agent set for this request")
 		headers.Set("User-Agent", constants.IosUserAgent)
+	} else if youtubeClient == "TV" {
+		log.Logger.Trace().Msg("TV user agent set for this request")
+		headers.Set("User-Agent", constants.TvUserAgent)
 	} else {
 		log.Logger.Trace().Msg("default user agent set for this request")
 		return
