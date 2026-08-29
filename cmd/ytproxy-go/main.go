@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"os"
@@ -61,17 +60,6 @@ func beforeProxy(next http.HandlerFunc) http.HandlerFunc {
 		w.Header().Set("Strict-Transport-Security", "max-age=86400")
 		w.Header().Set("X-Powered-By", "ytproxy-go "+version+"-"+runtime.GOARCH)
 
-		if req.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		if req.Method != "GET" && req.Method != "HEAD" {
-			w.WriteHeader(405)
-			io.WriteString(w, "Only GET and HEAD requests are allowed.")
-			return
-		}
-
 		metrics.Metrics.RequestCount.Inc()
 		next(w, req)
 	}
@@ -110,6 +98,7 @@ func main() {
 
 	// PROXY ROUTES
 	mux.HandleFunc("GET /videoplayback", beforeProxy(routes.Videoplayback))
+	mux.HandleFunc("OPTIONS /videoplayback", beforeProxy(routes.Options))
 	mux.HandleFunc("GET /vi/{id}/{name}", beforeProxy(routes.Vi))
 	mux.HandleFunc("GET /vi_webp/{id}/{name}", beforeProxy(routes.Vi))
 	mux.HandleFunc("GET /sb/{authority}/{id}/{storyboard}/{index}", beforeProxy(routes.Storyboards))

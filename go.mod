@@ -8,7 +8,6 @@ require (
 	github.com/quic-go/quic-go v0.61.0
 	github.com/rs/zerolog v1.35.1
 	gopkg.in/yaml.v3 v3.0.1
-	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -22,7 +21,6 @@ require (
 	github.com/prometheus/common v0.70.1 // indirect
 	github.com/prometheus/procfs v0.21.1 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
-	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	golang.org/x/crypto v0.55.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
