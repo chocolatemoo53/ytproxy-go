@@ -7,7 +7,7 @@ import (
 
 	"github.com/kelseyhightower/envconfig"
 	"github.com/rs/zerolog"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 var Cfg *config
