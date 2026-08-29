@@ -28,7 +28,7 @@ jobs:
         uses: https://code.forgejo.org/actions/checkout@v7
 
       - name: Setup Docker BuildX system
-        uses: https://code.forgejo.org/docker/setup-buildx-action@v3
+        uses: https://code.forgejo.org/docker/setup-buildx-action@v4
 
       - name: Login to Docker Container Registry
         uses: https://code.forgejo.org/docker/login-action@v4
