@@ -1,11 +1,11 @@
 module git.nadeko.net/Fijxu/ytproxy-go
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/kelseyhightower/envconfig v1.4.0
 	github.com/prometheus/client_golang v1.24.1
-	github.com/quic-go/quic-go v0.61.0
+	github.com/quic-go/quic-go v0.62.0
 	github.com/rs/zerolog v1.35.1
 	gopkg.in/yaml.v3 v3.0.1
 )
