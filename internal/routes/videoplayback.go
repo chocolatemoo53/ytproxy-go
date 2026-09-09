@@ -156,18 +156,24 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 
 	proxyURL, err := url.Parse("https://" + host + path)
 	if err != nil {
-		log.Logger.Panic().Err(err).Msg("failed to create proxy URL for /videoplayback request")
+		log.Logger.Error().Err(err).Msg("failed to create proxy URL for /videoplayback request")
+		http.Error(w, "failed to create proxy URL", http.StatusInternalServerError)
+		return
 	}
 
 	proxyURL.RawQuery = q.Encode()
 
-	postRequest, err := http.NewRequest("POST", proxyURL.String(), bytes.NewReader(protobuf_body))
+	postRequest, err := http.NewRequest("GET", proxyURL.String(), nil)
 	if err != nil {
-		log.Logger.Panic().Err(err).Msg("failed to create POST request")
+		log.Logger.Error().Err(err).Msg("failed to create GET request")
+		http.Error(w, "failed to create GET request", http.StatusInternalServerError)
+		return
 	}
 	headRequest, err := http.NewRequest("HEAD", proxyURL.String(), nil)
 	if err != nil {
-		log.Logger.Panic().Err(err).Msg("failed to create HEAD request")
+		log.Logger.Error().Err(err).Msg("failed to create HEAD request")
+		http.Error(w, "failed to create HEAD request", http.StatusInternalServerError)
+		return
 	}
 
 	youtubeClient := q.Get("c")
@@ -186,7 +192,9 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 	for i := 0; i < 5; i++ {
 		resp, err = httpc.Client.Do(headRequest)
 		if err != nil {
-			log.Logger.Panic().Err(err).Msg("failed to do HEAD request")
+			log.Logger.Error().Err(err).Msg("failed to do HEAD request")
+			http.Error(w, "failed to do HEAD request to googlevideo", http.StatusBadGateway)
+			return
 		}
 		if resp.Header.Get("Location") != "" {
 			new_url, _ := url.Parse(resp.Header.Get("Location"))
@@ -202,7 +210,9 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 
 	resp, err = httpc.Client.Do(postRequest)
 	if err != nil {
-		log.Logger.Panic().Err(err).Msg("failed to do POST request")
+		log.Logger.Error().Err(err).Msg("failed to do POST request")
+		http.Error(w, "failed to do POST request to googlevideo", http.StatusBadGateway)
+		return
 	}
 
 	if err := forbiddenChecker(resp, w); err != nil {
@@ -258,7 +268,9 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 	if req.Method == "GET" && (resp.Header.Get("Content-Type") == "application/x-mpegurl" || resp.Header.Get("Content-Type") == "application/vnd.apple.mpegurl") {
 		bytes, err := io.ReadAll(resp.Body)
 		if err != nil {
-			log.Logger.Panic().Err(err).Msg("failed to read body")
+			log.Logger.Error().Err(err).Msg("failed to read body")
+			http.Error(w, "failed to read response body", http.StatusBadGateway)
+			return
 		}
 
 		lines := strings.Split(string(bytes), "\n")
