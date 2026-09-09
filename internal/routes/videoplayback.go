@@ -1,7 +1,6 @@
 package routes
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -210,8 +209,8 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 
 	resp, err = httpc.Client.Do(postRequest)
 	if err != nil {
-		log.Logger.Error().Err(err).Msg("failed to do POST request")
-		http.Error(w, "failed to do POST request to googlevideo", http.StatusBadGateway)
+		log.Logger.Error().Err(err).Msg("failed to do GET request")
+		http.Error(w, "failed to do GET request to googlevideo", http.StatusBadGateway)
 		return
 	}
 
