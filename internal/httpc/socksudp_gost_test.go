@@ -33,7 +33,7 @@ func TestGostUDPAssociateEndToEnd(t *testing.T) {
 	}()
 
 	pconn, relayedTo, err := socks5UDPAssociate(
-		context.Background(), "127.0.0.1:1080", echo.LocalAddr().String(),
+		context.Background(), socksProxy{Addr: "127.0.0.1:1080"}, echo.LocalAddr().String(),
 	)
 	if err != nil {
 		t.Fatalf("ASSOCIATE via gost failed: %v", err)

@@ -140,6 +140,12 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 	q.Del("host")
 	q.Del("title")
 
+	// The YouTube video id (set by the companion), only for the proxy: it
+	// names the session, so everything for one video leaves from one address.
+	session := q.Get("ytid")
+	q.Del("ytid")
+	ctx := httpc.WithSession(req.Context(), session)
+
 	rangeHeader := req.Header.Get("range")
 	var requestBytes string
 	if rangeHeader != "" {
@@ -162,13 +168,13 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 
 	proxyURL.RawQuery = q.Encode()
 
-	postRequest, err := http.NewRequest("GET", proxyURL.String(), nil)
+	postRequest, err := http.NewRequestWithContext(ctx, "GET", proxyURL.String(), nil)
 	if err != nil {
 		log.Logger.Error().Err(err).Msg("failed to create GET request")
 		http.Error(w, "failed to create GET request", http.StatusInternalServerError)
 		return
 	}
-	headRequest, err := http.NewRequest("HEAD", proxyURL.String(), nil)
+	headRequest, err := http.NewRequestWithContext(ctx, "HEAD", proxyURL.String(), nil)
 	if err != nil {
 		log.Logger.Error().Err(err).Msg("failed to create HEAD request")
 		http.Error(w, "failed to create HEAD request", http.StatusInternalServerError)

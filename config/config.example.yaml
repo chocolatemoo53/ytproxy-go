@@ -19,6 +19,17 @@ server:
   port: 8080
 
 # Proxy to use for requests for Youtube
+#
+# The companion puts the YouTube video id in `ytid`. It is sent to the proxy as
+# the login (the username), so a proxy that rotates its source addresses
+# (proxy-ipv6-rotation.py) keeps all requests for a video on one address, the
+# one the video's URLs were issued to.
+#
+# HTTP/1.1 and HTTP/2: http://, https:// or socks5:// URLs.
+# HTTP/3 needs SOCKS5 with UDP ASSOCIATE: socks5h://host:port (the h leaves the
+# resolving of googlevideo's name to the proxy, needed for a proxy that only
+# has IPv6 source addresses). Any other scheme is ignored and QUIC leaves
+# directly. proxy-ipv6-rotation.py serves SOCKS5 when PROXY_SOCKS5_PORT is set.
 proxy: ""
 # The HTTP client version to use for requests to Youtube
 # 1: HTTP/1.1

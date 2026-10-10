@@ -29,6 +29,36 @@ type socksUDPConn struct {
 	control net.Conn      // TCP control connection; must stay open
 	target  *net.UDPAddr  // ultimate destination (googlevideo)
 	relay   *net.UDPAddr  // proxy-side relay endpoint
+	// host is set when the proxy resolves the destination itself (socks5h):
+	// datagrams then carry the name, target is only the address quic-go was
+	// dialed with.
+	host string
+}
+
+// socksProxy is how to reach a SOCKS5 proxy.
+type socksProxy struct {
+	Addr string
+	// User names the session. A proxy that rotates its source addresses
+	// (proxy-ipv6-rotation.py) keeps every connection with the same name on one
+	// address, which a googlevideo URL needs: it only works from the address
+	// it was issued to. The password is not used for anything.
+	User string
+	// RemoteDNS leaves the resolving of the destination to the proxy, needed
+	// when it only has IPv6 source addresses and the local resolver prefers A
+	// records.
+	RemoteDNS bool
+}
+
+// socksDomainHeader builds "RSV FRAG ATYP(domain) LEN NAME PORT".
+func socksDomainHeader(host string, port int) ([]byte, error) {
+	if len(host) == 0 || len(host) > 255 {
+		return nil, fmt.Errorf("socks5: invalid host name %q", host)
+	}
+	h := make([]byte, 0, 7+len(host))
+	h = append(h, 0, 0, 0, 3, byte(len(host)))
+	h = append(h, host...)
+	h = binary.BigEndian.AppendUint16(h, uint16(port))
+	return h, nil
 }
 
 var _ net.PacketConn = (*socksUDPConn)(nil)
@@ -67,7 +97,15 @@ func socksHeader(addr *net.UDPAddr) ([]byte, error) {
 }
 
 func (c *socksUDPConn) WriteTo(p []byte, _ net.Addr) (int, error) {
-	hdr, err := socksHeader(c.target)
+	var (
+		hdr []byte
+		err error
+	)
+	if c.host != "" {
+		hdr, err = socksDomainHeader(c.host, c.target.Port)
+	} else {
+		hdr, err = socksHeader(c.target)
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -130,16 +168,46 @@ func (c *socksUDPConn) ReadFrom(p []byte) (int, net.Addr, error) {
 		payload = payload[:len(p)]
 	}
 	copy(p, payload)
+	if c.host != "" {
+		// quic-go knows the connection by the address it was dialed with
+		src = c.target
+	}
 	return len(payload), src, nil
 }
 
 // socks5UDPAssociate performs the TCP handshake (method negotiation +
 // UDP ASSOCIATE) against proxyAddr and returns a PacketConn whose datagrams
 // are relayed towards target by the proxy.
-func socks5UDPAssociate(ctx context.Context, proxyAddr, target string) (*socksUDPConn, net.Addr, error) {
-	targetAddr, err := net.ResolveUDPAddr("udp", target)
-	if err != nil {
-		return nil, nil, fmt.Errorf("socks5: resolving %s: %w", target, err)
+func socks5UDPAssociate(ctx context.Context, proxy socksProxy, target string) (*socksUDPConn, net.Addr, error) {
+	proxyAddr := proxy.Addr
+	var (
+		targetAddr *net.UDPAddr
+		remoteHost string
+		err        error
+	)
+	if proxy.RemoteDNS {
+		host, portStr, splitErr := net.SplitHostPort(target)
+		if splitErr != nil {
+			return nil, nil, fmt.Errorf("socks5: invalid target %s: %w", target, splitErr)
+		}
+		port, convErr := strconv.Atoi(portStr)
+		if convErr != nil {
+			return nil, nil, fmt.Errorf("socks5: invalid port in %s: %w", target, convErr)
+		}
+		if net.ParseIP(host) == nil {
+			remoteHost = host
+		}
+		// What quic-go is dialed with; with a name, never used to send anything
+		ip := net.ParseIP(host)
+		if ip == nil {
+			ip = net.ParseIP("2001:db8::1")
+		}
+		targetAddr = &net.UDPAddr{IP: ip, Port: port}
+	} else {
+		targetAddr, err = net.ResolveUDPAddr("udp", target)
+		if err != nil {
+			return nil, nil, fmt.Errorf("socks5: resolving %s: %w", target, err)
+		}
 	}
 
 	var d net.Dialer
@@ -157,16 +225,40 @@ func socks5UDPAssociate(ctx context.Context, proxyAddr, target string) (*socksUD
 		return nil, nil, fmt.Errorf(format, a...)
 	}
 
-	// Method negotiation: no auth.
-	if _, err := control.Write([]byte{0x05, 0x01, 0x00}); err != nil {
+	// Method negotiation: a login that names the session when there is one,
+	// no auth otherwise.
+	if proxy.User == "" {
+		if _, err := control.Write([]byte{0x05, 0x01, 0x00}); err != nil {
+			return fail("socks5: sending greeting: %w", err)
+		}
+	} else if _, err := control.Write([]byte{0x05, 0x02, 0x00, 0x02}); err != nil {
 		return fail("socks5: sending greeting: %w", err)
 	}
 	greeting := make([]byte, 2)
 	if _, err := io.ReadFull(control, greeting); err != nil {
 		return fail("socks5: reading method reply: %w", err)
 	}
-	if greeting[0] != 0x05 || greeting[1] != 0x00 {
-		return fail("socks5: proxy refused no-auth method (got %x %x)", greeting[0], greeting[1])
+	switch {
+	case greeting[0] == 0x05 && greeting[1] == 0x00:
+	case greeting[0] == 0x05 && greeting[1] == 0x02 && proxy.User != "":
+		if len(proxy.User) > 255 {
+			return fail("socks5: session name too long")
+		}
+		login := []byte{0x01, byte(len(proxy.User))}
+		login = append(login, proxy.User...)
+		login = append(login, 0x01, 'x')
+		if _, err := control.Write(login); err != nil {
+			return fail("socks5: sending login: %w", err)
+		}
+		status := make([]byte, 2)
+		if _, err := io.ReadFull(control, status); err != nil {
+			return fail("socks5: reading login reply: %w", err)
+		}
+		if status[1] != 0x00 {
+			return fail("socks5: login refused (status %d)", status[1])
+		}
+	default:
+		return fail("socks5: proxy refused the method (got %x %x)", greeting[0], greeting[1])
 	}
 
 	// UDP ASSOCIATE with wildcard target.
@@ -222,7 +314,7 @@ func socks5UDPAssociate(ctx context.Context, proxyAddr, target string) (*socksUD
 	// relay cannot forward datagrams addressed to a literal IPv6 target
 	// (e.g. googlevideo's AAAA), which would blackhole QUIC silently.
 	// Re-resolve the target hostname for IPv4 in that case.
-	if relay.IP.To4() != nil && targetAddr.IP != nil && targetAddr.IP.To4() == nil {
+	if remoteHost == "" && relay.IP.To4() != nil && targetAddr.IP != nil && targetAddr.IP.To4() == nil {
 		host, portStr, splitErr := net.SplitHostPort(target)
 		if splitErr == nil && net.ParseIP(host) == nil {
 			ips, lookupErr := net.DefaultResolver.LookupIP(ctx, "ip4", host)
@@ -238,14 +330,14 @@ func socks5UDPAssociate(ctx context.Context, proxyAddr, target string) (*socksUD
 	if err != nil {
 		return fail("socks5: binding local UDP socket: %w", err)
 	}
-	return &socksUDPConn{udp: udp, control: control, target: targetAddr, relay: relay}, targetAddr, nil
+	return &socksUDPConn{udp: udp, control: control, target: targetAddr, relay: relay, host: remoteHost}, targetAddr, nil
 }
 
 // socks5UDPProxyDial returns a Dial function suitable for http3.Transport
 // that tunnels every QUIC connection through the SOCKS5 proxy at proxyAddr.
-func socks5UDPProxyDial(proxyAddr string) func(ctx context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (*quic.Conn, error) {
+func socks5UDPProxyDial(proxy socksProxy) func(ctx context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (*quic.Conn, error) {
 	return func(ctx context.Context, addr string, tlsCfg *tls.Config, cfg *quic.Config) (*quic.Conn, error) {
-		pconn, target, err := socks5UDPAssociate(ctx, proxyAddr, addr)
+		pconn, target, err := socks5UDPAssociate(ctx, proxy, addr)
 		if err != nil {
 			return nil, err
 		}
