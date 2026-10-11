@@ -3,6 +3,7 @@ package httpc
 import (
 	"context"
 	"crypto/tls"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -76,46 +77,85 @@ var H3client = &http.Client{
 // Every session has its own HTTP/3 transport (and so its own QUIC
 // connections) when the proxy is told the session name: a connection reused for
 // another video would leave from the address of the first one.
-const (
-	maxH3Sessions   = 128
-	h3SessionLinger = 60 * time.Second
-)
+//
+// There is no cap on the number of sessions (a cap closed the transports of
+// videos still playing once more were open). A transport is closed once none of
+// its requests has been in flight for h3SessionIdle instead.
+const h3SessionIdle = 10 * time.Minute
 
-type h3Sessions struct {
-	mu      sync.Mutex
-	proxy   socksProxy
-	base    *http3.Transport
-	entries map[string]*http3.Transport
-	order   []string
+type h3Session struct {
+	t        *http3.Transport
+	inFlight int
+	lastUsed time.Time
 }
 
-func (p *h3Sessions) transport(name string) *http3.Transport {
+type h3Sessions struct {
+	mu        sync.Mutex
+	proxy     socksProxy
+	base      *http3.Transport
+	entries   map[string]*h3Session
+	lastSweep time.Time
+}
+
+// acquire returns the session's transport and counts a request in flight on
+// it; release ends that request's turn (safe to call more than once).
+func (p *h3Sessions) acquire(name string) (t *http3.Transport, release func()) {
 	if name == "" || p.proxy.Addr == "" {
-		return p.base
+		return p.base, func() {}
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if t, ok := p.entries[name]; ok {
-		return t
+	now := time.Now()
+	if now.Sub(p.lastSweep) > time.Minute {
+		p.lastSweep = now
+		for key, s := range p.entries {
+			if s.inFlight == 0 && now.Sub(s.lastUsed) > h3SessionIdle {
+				delete(p.entries, key)
+				_ = s.t.Close()
+			}
+		}
 	}
-	for len(p.order) >= maxH3Sessions {
-		oldest := p.order[0]
-		p.order = p.order[1:]
-		old := p.entries[oldest]
-		delete(p.entries, oldest)
-		// Let the requests still using it finish
-		time.AfterFunc(h3SessionLinger, func() { _ = old.Close() })
+	s, ok := p.entries[name]
+	if !ok {
+		proxy := p.proxy
+		proxy.User = name
+		s = &h3Session{t: &http3.Transport{Dial: socks5UDPProxyDial(proxy)}}
+		p.entries[name] = s
 	}
-	proxy := p.proxy
-	proxy.User = name
-	t := &http3.Transport{Dial: socks5UDPProxyDial(proxy)}
-	p.entries[name] = t
-	p.order = append(p.order, name)
-	return t
+	s.inFlight++
+	s.lastUsed = now
+	var once sync.Once
+	return s.t, func() {
+		once.Do(func() {
+			p.mu.Lock()
+			s.inFlight--
+			s.lastUsed = time.Now()
+			p.mu.Unlock()
+		})
+	}
 }
 
 func (p *h3Sessions) RoundTrip(req *http.Request) (*http.Response, error) {
-	return p.transport(sessionFrom(req.Context())).RoundTrip(req)
+	t, release := p.acquire(sessionFrom(req.Context()))
+	resp, err := t.RoundTrip(req)
+	if err != nil || resp.Body == nil {
+		release()
+		return resp, err
+	}
+	resp.Body = &releasingBody{ReadCloser: resp.Body, release: release}
+	return resp, nil
+}
+
+// releasingBody ends the request's turn on its session once the body is closed.
+type releasingBody struct {
+	io.ReadCloser
+	release func()
+}
+
+func (b *releasingBody) Close() error {
+	err := b.ReadCloser.Close()
+	b.release()
+	return err
 }
 
 // socksProxyFrom reads a socks5:// or socks5h:// proxy URL. socks5h leaves the
@@ -131,7 +171,7 @@ func socksProxyFrom(u *url.URL) (socksProxy, bool) {
 // NewH3Client builds the HTTP/3 client, routing through a SOCKS5 proxy's
 // UDP relay when config.Cfg.Proxy is set.
 func NewH3Client() *http.Client {
-	pool := &h3Sessions{base: &http3.Transport{}, entries: map[string]*http3.Transport{}}
+	pool := &h3Sessions{base: &http3.Transport{}, entries: map[string]*h3Session{}}
 	if config.Cfg.Proxy != "" {
 		u, err := url.Parse(config.Cfg.Proxy)
 		if proxy, ok := socksProxyFrom(u); err == nil && ok {

@@ -176,27 +176,49 @@ func TestH3SessionsUseOneTransportPerSession(t *testing.T) {
 	pool := &h3Sessions{
 		proxy:   socksProxy{Addr: "127.0.0.1:1080", RemoteDNS: true},
 		base:    &http3.Transport{},
-		entries: map[string]*http3.Transport{},
+		entries: map[string]*h3Session{},
 	}
-	a := pool.transport("videoA")
-	if a != pool.transport("videoA") {
+	transport := func(name string) *http3.Transport {
+		tr, release := pool.acquire(name)
+		release()
+		return tr
+	}
+	a := transport("videoA")
+	if a != transport("videoA") {
 		t.Fatal("the same session must reuse its transport (and its QUIC connections)")
 	}
-	if a == pool.transport("videoB") {
+	if a == transport("videoB") {
 		t.Fatal("another session must not share a transport")
 	}
-	if pool.transport("") != pool.base {
+	if transport("") != pool.base {
 		t.Fatal("a request without a session uses the base transport")
 	}
-	for i := 0; i < maxH3Sessions+20; i++ {
-		pool.transport(fmt.Sprintf("v%d", i))
+	// No cap: a busy instance keeps every playing video's connections
+	for i := 0; i < 300; i++ {
+		transport(fmt.Sprintf("v%d", i))
 	}
-	if len(pool.entries) > maxH3Sessions || len(pool.order) > maxH3Sessions {
-		t.Fatalf("sessions are not bounded: %d entries", len(pool.entries))
+	if len(pool.entries) != 302 {
+		t.Fatalf("every session keeps its transport, got %d", len(pool.entries))
 	}
 
-	direct := &h3Sessions{base: &http3.Transport{}, entries: map[string]*http3.Transport{}}
-	if direct.transport("videoA") != direct.base {
+	// Idle sessions are closed, one with a request in flight is kept however old
+	_, release := pool.acquire("streaming")
+	old := time.Now().Add(-2 * h3SessionIdle)
+	for _, s := range pool.entries {
+		s.lastUsed = old
+	}
+	pool.lastSweep = old
+	transport("fresh")
+	if _, ok := pool.entries["streaming"]; !ok {
+		t.Fatal("a session with a request in flight must not be closed")
+	}
+	if _, ok := pool.entries["videoA"]; ok || len(pool.entries) != 2 {
+		t.Fatalf("idle sessions must be closed, %d left", len(pool.entries))
+	}
+	release()
+
+	direct := &h3Sessions{base: &http3.Transport{}, entries: map[string]*h3Session{}}
+	if tr, _ := direct.acquire("videoA"); tr != direct.base {
 		t.Fatal("without a proxy there is nothing to name a session to")
 	}
 }

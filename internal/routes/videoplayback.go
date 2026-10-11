@@ -98,6 +98,7 @@ func processDecryptedQueryParams(structuredDecryptedQueryParams *[][]string, q *
 }
 
 func Videoplayback(w http.ResponseWriter, req *http.Request) {
+	start := time.Now()
 	q := req.URL.Query()
 
 	if q.Get("enc") == "true" {
@@ -194,13 +195,17 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 	// https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-p2-semantics-17#section-7.3
 	// A maximum of 5 redirections is defined in the note of the section 7.3
 	// of this RFC, that's why `i < 5`
-	for i := 0; i < 5; i++ {
+	//
+	// Only for clients that don't follow redirects themselves: the HTTP/3
+	// client does, and the HEAD would cost every request a round trip.
+	for i := 0; i < 5 && httpc.Client.CheckRedirect != nil; i++ {
 		resp, err = httpc.Client.Do(headRequest)
 		if err != nil {
-			log.Logger.Error().Err(err).Msg("failed to do HEAD request")
+			log.Logger.Error().Err(err).Str("session", session).Dur("after", time.Since(start)).Msg("failed to do HEAD request")
 			http.Error(w, "failed to do HEAD request to googlevideo", http.StatusBadGateway)
 			return
 		}
+		resp.Body.Close()
 		if resp.Header.Get("Location") != "" {
 			new_url, _ := url.Parse(resp.Header.Get("Location"))
 			postRequest.URL = new_url
@@ -215,17 +220,18 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 
 	resp, err = httpc.Client.Do(postRequest)
 	if err != nil {
-		log.Logger.Error().Err(err).Msg("failed to do GET request")
+		log.Logger.Error().Err(err).Str("session", session).Dur("after", time.Since(start)).Msg("failed to do GET request")
 		http.Error(w, "failed to do GET request to googlevideo", http.StatusBadGateway)
 		return
 	}
+	// Before the 403 check: an unclosed body holds its HTTP/3 stream
+	defer resp.Body.Close()
 
 	if err := forbiddenChecker(resp, w); err != nil {
 		metrics.Metrics.RequestForbidden.Videoplayback.Inc()
+		log.Logger.Warn().Str("session", session).Str("host", resp.Request.Host).Dur("after", time.Since(start)).Msg("googlevideo answered 403")
 		return
 	}
-
-	defer resp.Body.Close()
 
 	utils.CopyHeadersNew(resp.Header, w.Header())
 
