@@ -227,6 +227,18 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 	// Before the 403 check: an unclosed body holds its HTTP/3 stream
 	defer resp.Body.Close()
 
+	// The companion's own /videoplayback asks YouTube for a fresh URL when one
+	// is refused (another client, another address); a player sent here skips
+	// that, so hand the request over. Its `ytid` is the bare video id.
+	if resp.StatusCode == http.StatusForbidden && config.Cfg.Companion.Fallback_path != "" && session != "" {
+		metrics.Metrics.RequestForbidden.Videoplayback.Inc()
+		log.Logger.Warn().Str("session", session).Str("host", resp.Request.Host).Dur("after", time.Since(start)).Msg("googlevideo answered 403, handing over to the companion")
+		fallback := req.URL.Query()
+		fallback.Set("ytid", strings.SplitN(session, ".", 2)[0])
+		http.Redirect(w, req, config.Cfg.Companion.Fallback_path+"/videoplayback?"+fallback.Encode(), http.StatusTemporaryRedirect)
+		return
+	}
+
 	if err := forbiddenChecker(resp, w); err != nil {
 		metrics.Metrics.RequestForbidden.Videoplayback.Inc()
 		log.Logger.Warn().Str("session", session).Str("host", resp.Request.Host).Dur("after", time.Since(start)).Msg("googlevideo answered 403")

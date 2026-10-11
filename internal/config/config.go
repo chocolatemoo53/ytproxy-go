@@ -27,6 +27,10 @@ type config struct {
 	Companion       struct {
 		// Used for videoplayback query encryption
 		Secret_key string `yaml:"secret_key" envconfig:"SECRET_KEY"`
+		// Where the companion's own /videoplayback is (e.g. "/companion"):
+		// a request googlevideo refuses is redirected there, which asks for a
+		// fresh URL. Empty: the 403 is passed on.
+		Fallback_path string `yaml:"fallback_path" envconfig:"FALLBACK_PATH"`
 	} `yaml:"companion"`
 }
 
@@ -54,7 +58,8 @@ func LoadConfig() {
 		Ipv6_only:       false,
 		LogLevel:        "info",
 		Companion: struct {
-			Secret_key string "yaml:\"secret_key\" envconfig:\"SECRET_KEY\""
+			Secret_key    string "yaml:\"secret_key\" envconfig:\"SECRET_KEY\""
+			Fallback_path string "yaml:\"fallback_path\" envconfig:\"FALLBACK_PATH\""
 		}{
 			Secret_key: "",
 		},

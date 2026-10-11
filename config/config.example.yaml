@@ -43,3 +43,8 @@ log_level: info
 companion:
   # 16 characters secret key from Invidious Companion
   secret_key: ""
+  # Where the companion's own /videoplayback is, e.g. "/companion" when both
+  # are served on one host. A URL googlevideo refuses (403) is redirected
+  # there, and the companion asks YouTube for a fresh one. Empty: the 403 is
+  # passed on to the player.
+  fallback_path: ""
