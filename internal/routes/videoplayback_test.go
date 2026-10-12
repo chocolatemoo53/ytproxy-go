@@ -1,10 +1,16 @@
 package routes
 
 import (
+	"bytes"
+	"crypto/rand"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"git.nadeko.net/Fijxu/ytproxy-go/internal/config"
@@ -61,5 +67,63 @@ func TestRefusedURLIsHandedOverToTheCompanion(t *testing.T) {
 	Videoplayback(rec, httptest.NewRequest("GET", target, nil))
 	if rec.Code != http.StatusForbidden {
 		t.Fatalf("without a fallback the 403 is passed on, got %d", rec.Code)
+	}
+}
+
+// Serves the `range` query parameter of a fixed file, like googlevideo does.
+type rangeTransport struct {
+	data   []byte
+	ranges *[]string
+	mu     *sync.Mutex
+}
+
+func (f rangeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	r := req.URL.Query().Get("range")
+	f.mu.Lock()
+	*f.ranges = append(*f.ranges, r)
+	f.mu.Unlock()
+	var from, to int
+	fmt.Sscanf(r, "%d-%d", &from, &to)
+	body := f.data[from : to+1]
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(bytes.NewReader(body)),
+		Header:     http.Header{"Content-Length": {strconv.Itoa(len(body))}, "Content-Type": {"video/webm"}},
+		Request:    req,
+	}, nil
+}
+
+func TestLongRangesAreFetchedInChunks(t *testing.T) {
+	config.LoadConfig()
+	log.StartLogger()
+	data := make([]byte, 5*chunkSize+123)
+	rand.Read(data)
+	var ranges []string
+	httpc.Client = &http.Client{Transport: rangeTransport{data, &ranges, &sync.Mutex{}}}
+
+	from, to := 100, len(data)-7
+	req := httptest.NewRequest("GET", "/videoplayback?host=rr1---sn-test.googlevideo.com&itag=313&expire=9999999999&clen="+strconv.Itoa(len(data)), nil)
+	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", from, to))
+	rec := httptest.NewRecorder()
+	Videoplayback(rec, req)
+
+	if rec.Code != http.StatusPartialContent {
+		t.Fatalf("want 206, got %d", rec.Code)
+	}
+	if !bytes.Equal(rec.Body.Bytes(), data[from:to+1]) {
+		t.Fatalf("the chunks must be stitched back in order (%d bytes)", rec.Body.Len())
+	}
+	if rec.Header().Get("Content-Length") != strconv.Itoa(to-from+1) {
+		t.Fatalf("Content-Length must be the whole range, got %s", rec.Header().Get("Content-Length"))
+	}
+	if len(ranges) != 6 {
+		t.Fatalf("want 6 chunk requests, got %v", ranges)
+	}
+	for _, r := range ranges {
+		var a, b int
+		fmt.Sscanf(r, "%d-%d", &a, &b)
+		if b-a+1 > chunkSize {
+			t.Fatalf("chunk %s is longer than %d", r, chunkSize)
+		}
 	}
 }

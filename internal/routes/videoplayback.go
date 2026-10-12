@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -199,7 +200,12 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 	} else {
 		requestBytes = ""
 	}
-	if requestBytes != "" {
+	// googlevideo paces a long request to about the format's bitrate after a fast
+	// start, so a 4K segment arrived as slowly as it plays: fetch it in pieces
+	chunkFrom, chunkTo, chunked := chunkedRange(requestBytes)
+	if chunked {
+		q.Set("range", strconv.FormatInt(chunkFrom, 10)+"-"+strconv.FormatInt(chunkFrom+chunkSize-1, 10))
+	} else if requestBytes != "" {
 		q.Set("range", requestBytes)
 	}
 
@@ -287,6 +293,10 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 	}
 
 	utils.CopyHeadersNew(resp.Header, w.Header())
+	chunked = chunked && resp.StatusCode == http.StatusOK
+	if chunked {
+		w.Header().Set("Content-Length", strconv.FormatInt(chunkTo-chunkFrom+1, 10))
+	}
 
 	if title != "" {
 		content := "attachment; filename=\"" + url.PathEscape(title) + "\"; filename*=UTF-8''" + url.PathEscape(title)
@@ -359,5 +369,92 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 		_, _ = io.WriteString(w, strings.Join(lines, "\n"))
 	} else {
 		_, _ = io.Copy(w, resp.Body)
+		if chunked {
+			err := copyChunks(ctx, w, resp.Request.URL, postRequest.Header, chunkFrom+chunkSize, chunkTo)
+			if err != nil {
+				log.Logger.Warn().Err(err).Str("session", session).Msg("failed to fetch the rest of a chunked range")
+			}
+		}
 	}
+}
+
+const (
+	chunkSize   = 2 << 20
+	chunksAhead = 4
+)
+
+// chunkedRange reads a closed range "from-to" longer than one chunk.
+func chunkedRange(requestBytes string) (from, to int64, ok bool) {
+	parts := strings.Split(requestBytes, "-")
+	if len(parts) != 2 {
+		return 0, 0, false
+	}
+	from, err1 := strconv.ParseInt(parts[0], 10, 64)
+	to, err2 := strconv.ParseInt(parts[1], 10, 64)
+	return from, to, err1 == nil && err2 == nil && to-from+1 > chunkSize
+}
+
+// copyChunks writes bytes from-to of the URL, fetched chunkSize at a time with up
+// to chunksAhead requests in flight, in order.
+func copyChunks(ctx context.Context, w io.Writer, base *url.URL, header http.Header, from, to int64) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	type result struct {
+		body []byte
+		err  error
+	}
+	ahead := make(chan struct{}, chunksAhead)
+	queue := make(chan chan result, chunksAhead)
+	go func() {
+		defer close(queue)
+		for start := from; start <= to; start += chunkSize {
+			select {
+			case ahead <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
+			done := make(chan result, 1)
+			queue <- done
+			go func(start, end int64) {
+				body, err := fetchChunk(ctx, base, header, start, end)
+				done <- result{body, err}
+			}(start, min(start+chunkSize-1, to))
+		}
+	}()
+	for done := range queue {
+		r := <-done
+		<-ahead
+		if r.err != nil {
+			return r.err
+		}
+		if _, err := w.Write(r.body); err != nil {
+			return err
+		}
+	}
+	return ctx.Err()
+}
+
+func fetchChunk(ctx context.Context, base *url.URL, header http.Header, start, end int64) ([]byte, error) {
+	u := *base
+	q := u.Query()
+	q.Set("range", strconv.FormatInt(start, 10)+"-"+strconv.FormatInt(end, 10))
+	u.RawQuery = q.Encode()
+	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header = header
+	resp, err := httpc.Client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("googlevideo answered %d for bytes %d-%d", resp.StatusCode, start, end)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err == nil && int64(len(body)) != end-start+1 {
+		err = fmt.Errorf("got %d bytes for %d-%d", len(body), start, end)
+	}
+	return body, err
 }
