@@ -31,8 +31,10 @@ type affinityState struct {
 // sessionSource is the address the proxy gave the session `name`, nil when it
 // has none (yet).
 func sessionSource(path, name string) net.IP {
-	// The proxy rewrites the file under an exclusive flock of the .lock next to it
-	lock, err := os.OpenFile(strings.TrimSuffix(path, ".json")+".lock", os.O_RDONLY|os.O_CREATE, 0o644)
+	// The proxy rewrites the file under an exclusive flock of the .lock next to it.
+	// Never create the lock: in sticky /dev/shm (fs.protected_regular) the proxy's
+	// root couldn't open one we own, and would lose its shared session state.
+	lock, err := os.Open(strings.TrimSuffix(path, ".json") + ".lock")
 	if err != nil {
 		return nil
 	}

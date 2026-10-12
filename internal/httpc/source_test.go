@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,6 +24,9 @@ func writeAffinity(t *testing.T) string {
 		"videoA.1": {"addr": "::1", "expires": %d},
 		"old.1": {"addr": "2001:db8::2", "expires": %d}}}`, now+3600, now-10)
 	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(strings.TrimSuffix(path, ".json")+".lock", nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return path
@@ -41,6 +45,14 @@ func TestSessionSourceReadsTheProxysAddress(t *testing.T) {
 	}
 	if got := sessionSource(filepath.Join(t.TempDir(), "missing.json"), "videoA.1"); got != nil {
 		t.Fatalf("no file, no address, got %v", got)
+	}
+	// The proxy (root) can't open a lock in /dev/shm that ytproxy-go created
+	os.Remove(strings.TrimSuffix(path, ".json") + ".lock")
+	if got := sessionSource(path, "videoA.1"); got != nil {
+		t.Fatalf("without the proxy's lock, no address, got %v", got)
+	}
+	if _, err := os.Stat(strings.TrimSuffix(path, ".json") + ".lock"); err == nil {
+		t.Fatal("ytproxy-go must never create the proxy's lock file")
 	}
 }
 
