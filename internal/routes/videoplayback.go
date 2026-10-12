@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"git.nadeko.net/Fijxu/ytproxy-go/internal/config"
@@ -16,6 +17,36 @@ import (
 	"git.nadeko.net/Fijxu/ytproxy-go/internal/metrics"
 	"git.nadeko.net/Fijxu/ytproxy-go/internal/utils"
 )
+
+// Sessions whose URL googlevideo refused lately. Their requests are handed over
+// to the companion straight away instead of being refused again first; the
+// companion's fresh URLs carry a new session name, so they don't match.
+var (
+	refusedMu       sync.Mutex
+	refusedSessions = map[string]time.Time{}
+)
+
+const refusedFor = 10 * time.Minute
+
+func refusedRecently(session string) bool {
+	refusedMu.Lock()
+	defer refusedMu.Unlock()
+	at, ok := refusedSessions[session]
+	return ok && time.Since(at) < refusedFor
+}
+
+func markRefused(session string) {
+	refusedMu.Lock()
+	defer refusedMu.Unlock()
+	if len(refusedSessions) > 5000 {
+		for key, at := range refusedSessions {
+			if time.Since(at) >= refusedFor {
+				delete(refusedSessions, key)
+			}
+		}
+	}
+	refusedSessions[session] = time.Now()
+}
 
 func forbiddenChecker(resp *http.Response, w http.ResponseWriter) error {
 	if resp.StatusCode == 403 {
@@ -147,6 +178,20 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 	q.Del("ytid")
 	ctx := httpc.WithSession(req.Context(), session)
 
+	// The companion's own /videoplayback asks YouTube for a fresh URL when one
+	// is refused (another client, another address); a player sent here skips
+	// that, so a refused request is handed over. Its `ytid` is the bare video id.
+	canHandOver := config.Cfg.Companion.Fallback_path != "" && session != ""
+	handOver := func() {
+		fallback := req.URL.Query()
+		fallback.Set("ytid", strings.SplitN(session, ".", 2)[0])
+		http.Redirect(w, req, config.Cfg.Companion.Fallback_path+"/videoplayback?"+fallback.Encode(), http.StatusTemporaryRedirect)
+	}
+	if canHandOver && refusedRecently(session) {
+		handOver()
+		return
+	}
+
 	rangeHeader := req.Header.Get("range")
 	var requestBytes string
 	if rangeHeader != "" {
@@ -227,15 +272,11 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 	// Before the 403 check: an unclosed body holds its HTTP/3 stream
 	defer resp.Body.Close()
 
-	// The companion's own /videoplayback asks YouTube for a fresh URL when one
-	// is refused (another client, another address); a player sent here skips
-	// that, so hand the request over. Its `ytid` is the bare video id.
-	if resp.StatusCode == http.StatusForbidden && config.Cfg.Companion.Fallback_path != "" && session != "" {
+	if resp.StatusCode == http.StatusForbidden && canHandOver {
 		metrics.Metrics.RequestForbidden.Videoplayback.Inc()
 		log.Logger.Warn().Str("session", session).Str("host", resp.Request.Host).Dur("after", time.Since(start)).Msg("googlevideo answered 403, handing over to the companion")
-		fallback := req.URL.Query()
-		fallback.Set("ytid", strings.SplitN(session, ".", 2)[0])
-		http.Redirect(w, req, config.Cfg.Companion.Fallback_path+"/videoplayback?"+fallback.Encode(), http.StatusTemporaryRedirect)
+		markRefused(session)
+		handOver()
 		return
 	}
 
