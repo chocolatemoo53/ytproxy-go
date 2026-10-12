@@ -95,12 +95,19 @@ type h3Sessions struct {
 	base      *http3.Transport
 	entries   map[string]*h3Session
 	lastSweep time.Time
+	// sourceState is the rotation proxy's session file (see source.go): a
+	// session found there dials from its own address, the rest takes fallback.
+	sourceState string
+	fallback    http.RoundTripper
 }
 
 // acquire returns the session's transport and counts a request in flight on
 // it; release ends that request's turn (safe to call more than once).
-func (p *h3Sessions) acquire(name string) (t *http3.Transport, release func()) {
-	if name == "" || p.proxy.Addr == "" {
+func (p *h3Sessions) acquire(name string) (t http.RoundTripper, release func()) {
+	if name == "" && p.sourceState != "" {
+		return p.fallback, func() {}
+	}
+	if name == "" || (p.proxy.Addr == "" && p.sourceState == "") {
 		return p.base, func() {}
 	}
 	p.mu.Lock()
@@ -117,9 +124,18 @@ func (p *h3Sessions) acquire(name string) (t *http3.Transport, release func()) {
 	}
 	s, ok := p.entries[name]
 	if !ok {
-		proxy := p.proxy
-		proxy.User = name
-		s = &h3Session{t: &http3.Transport{Dial: socks5UDPProxyDial(proxy)}}
+		if p.sourceState != "" {
+			source := sessionSource(p.sourceState, name)
+			if source == nil {
+				// The session's first request over the HTTP proxy gives it an address
+				return p.fallback, func() {}
+			}
+			s = &h3Session{t: &http3.Transport{Dial: boundDial(source)}}
+		} else {
+			proxy := p.proxy
+			proxy.User = name
+			s = &h3Session{t: &http3.Transport{Dial: socks5UDPProxyDial(proxy)}}
+		}
 		p.entries[name] = s
 	}
 	s.inFlight++
@@ -168,10 +184,17 @@ func socksProxyFrom(u *url.URL) (socksProxy, bool) {
 	return socksProxy{}, false
 }
 
-// NewH3Client builds the HTTP/3 client, routing through a SOCKS5 proxy's
-// UDP relay when config.Cfg.Proxy is set.
+// NewH3Client builds the HTTP/3 client: sending from the rotation proxy's
+// session addresses when config.Cfg.Source_state is set (anything else goes
+// over HTTP/2 through config.Cfg.Proxy), or routing through a SOCKS5 proxy's
+// UDP relay when config.Cfg.Proxy is a socks5:// one.
 func NewH3Client() *http.Client {
 	pool := &h3Sessions{base: &http3.Transport{}, entries: map[string]*h3Session{}}
+	if config.Cfg.Source_state != "" {
+		pool.sourceState = config.Cfg.Source_state
+		pool.fallback = H2client.Transport
+		return &http.Client{Transport: pool}
+	}
 	if config.Cfg.Proxy != "" {
 		u, err := url.Parse(config.Cfg.Proxy)
 		if proxy, ok := socksProxyFrom(u); err == nil && ok {

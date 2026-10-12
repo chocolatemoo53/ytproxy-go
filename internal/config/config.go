@@ -24,7 +24,10 @@ type config struct {
 	Proxy           string `yaml:"proxy" envconfig:"PROXY"`
 	Http_client_ver int    `yaml:"http_client_version" envconfig:"HTTP_CLIENT_VERSION"`
 	Ipv6_only       bool   `yaml:"ipv6_only" envconfig:"IPV6_ONLY"`
-	Companion       struct {
+	// The IPv6 rotation proxy's session file (/dev/shm/ipv6_rotation_affinity.json);
+	// with HTTP/3, a video's QUIC leaves from its session's address directly
+	Source_state string `yaml:"source_state" envconfig:"SOURCE_STATE"`
+	Companion    struct {
 		// Used for videoplayback query encryption
 		Secret_key string `yaml:"secret_key" envconfig:"SECRET_KEY"`
 		// Where the companion's own /videoplayback is (e.g. "/companion"):

@@ -178,7 +178,7 @@ func TestH3SessionsUseOneTransportPerSession(t *testing.T) {
 		base:    &http3.Transport{},
 		entries: map[string]*h3Session{},
 	}
-	transport := func(name string) *http3.Transport {
+	transport := func(name string) http.RoundTripper {
 		tr, release := pool.acquire(name)
 		release()
 		return tr

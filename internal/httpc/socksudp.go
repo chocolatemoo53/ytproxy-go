@@ -341,6 +341,6 @@ func socks5UDPProxyDial(proxy socksProxy) func(ctx context.Context, addr string,
 		if err != nil {
 			return nil, err
 		}
-		return quic.Dial(ctx, pconn, target, tlsCfg, cfg)
+		return dialOwning(ctx, pconn, target, tlsCfg, cfg)
 	}
 }
