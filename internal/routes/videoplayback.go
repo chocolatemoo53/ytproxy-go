@@ -179,6 +179,12 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 	q.Del("ytid")
 	ctx := httpc.WithSession(req.Context(), session)
 
+	playbackSession := q.Get("ei")
+	if playbackSession == "" {
+		playbackSession = session
+	}
+	metrics.Playback.Seen(playbackSession, q.Get("itag"), q.Get("mime"))
+
 	// The companion's own /videoplayback asks YouTube for a fresh URL when one
 	// is refused (another client, another address); a player sent here skips
 	// that, so a refused request is handed over. Its `ytid` is the bare video id.
