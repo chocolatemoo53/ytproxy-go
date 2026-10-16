@@ -10,20 +10,21 @@ import (
 
 var defaultUa = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36"
 
+// ponytail: copies of the companion's INNERTUBE_CLIENTS user agents (youtubePlayerReq.ts), update both together
 var constants = struct {
-	DefaultUa        string
-	GgphtHost        string
-	AndroidUserAgent string
-	WebUserAgent     string
-	IosUserAgent     string
-	TvUserAgent      string
+	DefaultUa          string
+	GgphtHost          string
+	VisionosUserAgent  string
+	AndroidVrUserAgent string
+	TvUserAgent        string
+	TvSamsungUserAgent string
 }{
-	DefaultUa:        defaultUa,
-	GgphtHost:        "yt3.ggpht.com",
-	AndroidUserAgent: "com.google.android.youtube/1537338816 (Linux; U; Android 13; en_US; ; Build/TQ2A.230505.002; Cronet/113.0.5672.24)",
-	WebUserAgent:     defaultUa,
-	IosUserAgent:     "com.google.ios.youtube/19.32.8 (iPhone14,5; U; CPU iOS 17_6 like Mac OS X;)",
-	TvUserAgent:      "Mozilla/5.0 (SMART-TV; Linux; Tizen 4.0.0.2) AppleWebkit/605.1.15 (KHTML, like Gecko) SamsungBrowser/9.2 TV Safari/605.1.15",
+	DefaultUa:          defaultUa,
+	GgphtHost:          "yt3.ggpht.com",
+	VisionosUserAgent:  "com.google.visionos.youtube/1.04 (iPhone; U; iOS 26.6.0; en_US) C4D5D05E-F7B8-44F7-AB95-B13A1B8E4B41",
+	AndroidVrUserAgent: "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12; eureka-user Build/SQ3A.220605.009.A1)",
+	TvUserAgent:        "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/25.lts.30.1034943-gold (unlike Gecko), Unknown_TV_Unknown_0/Unknown (Unknown, Unknown)",
+	TvSamsungUserAgent: "Mozilla/5.0 (SMART-TV; Linux; Tizen 2.4.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/2.4.0 TV Safari/538.1",
 }
 
 func newProxyRequest(req *http.Request, proxyURL string, body io.Reader) (*http.Request, error) {

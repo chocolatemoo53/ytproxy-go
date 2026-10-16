@@ -103,19 +103,22 @@ func checkRequest(w http.ResponseWriter, req *http.Request, params url.Values) b
 	return false
 }
 
-func setUserAgent(headers *http.Header, youtubeClient string) {
-	if youtubeClient == "ANDROID" {
-		log.Logger.Trace().Msg("ANDROID user agent set for this request")
-		headers.Set("User-Agent", constants.AndroidUserAgent)
-	} else if youtubeClient == "IOS" {
-		log.Logger.Trace().Msg("IOS user agent set for this request")
-		headers.Set("User-Agent", constants.IosUserAgent)
-	} else if youtubeClient == "TV" {
-		log.Logger.Trace().Msg("TV user agent set for this request")
+// Send the user agent of the client the URL was issued to, named by its c and cver params
+func setUserAgent(headers *http.Header, youtubeClient string, clientVersion string) {
+	switch {
+	// Native apps aren't on a youtube.com page, so they send no Origin or Referer
+	case youtubeClient == "VISIONOS":
+		headers.Set("User-Agent", constants.VisionosUserAgent)
+		headers.Del("Origin")
+		headers.Del("Referer")
+	case youtubeClient == "ANDROID_VR":
+		headers.Set("User-Agent", constants.AndroidVrUserAgent)
+		headers.Del("Origin")
+		headers.Del("Referer")
+	case youtubeClient == "TVHTML5" && strings.HasPrefix(clientVersion, "5."):
+		headers.Set("User-Agent", constants.TvSamsungUserAgent)
+	case youtubeClient == "TVHTML5":
 		headers.Set("User-Agent", constants.TvUserAgent)
-	} else {
-		log.Logger.Trace().Msg("default user agent set for this request")
-		return
 	}
 }
 
@@ -243,7 +246,7 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 
 	videoplaybackHeaders := defaultHeaders.Clone()
 	log.Logger.Trace().Any("headers", videoplaybackHeaders).Msg("setting default headers for /videoplayback request")
-	setUserAgent(&videoplaybackHeaders, youtubeClient)
+	setUserAgent(&videoplaybackHeaders, youtubeClient, q.Get("cver"))
 	postRequest.Header = videoplaybackHeaders
 	headRequest.Header = videoplaybackHeaders
 

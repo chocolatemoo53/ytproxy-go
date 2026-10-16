@@ -127,3 +127,25 @@ func TestLongRangesAreFetchedInChunks(t *testing.T) {
 		}
 	}
 }
+
+func TestSetUserAgent(t *testing.T) {
+	cases := []struct{ client, cver, ua string }{
+		{"VISIONOS", "", constants.VisionosUserAgent},
+		{"TVHTML5", "7.20260311.12.00", constants.TvUserAgent},
+		{"TVHTML5", "5.20260707", constants.TvSamsungUserAgent},
+		{"WEB", "2.20260708", constants.DefaultUa},
+	}
+	for _, c := range cases {
+		h := defaultHeaders.Clone()
+		setUserAgent(&h, c.client, c.cver)
+		if h.Get("User-Agent") != c.ua {
+			t.Errorf("%s %s: got %q", c.client, c.cver, h.Get("User-Agent"))
+		}
+		if native := c.client == "VISIONOS"; native == (h.Get("Origin") != "") {
+			t.Errorf("%s: Origin %q", c.client, h.Get("Origin"))
+		}
+	}
+	if defaultHeaders.Get("Origin") == "" {
+		t.Error("setUserAgent changed the shared default headers")
+	}
+}
