@@ -3,6 +3,7 @@ package utils
 import (
 	"crypto/aes"
 	"encoding/base64"
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -90,6 +91,9 @@ func DecryptQueryParams(encryptedQuery string, key string) (string, error) {
 		log.Logger.Error().Err(err).Msg("error initializating cipher.Block")
 		return "", err
 	}
+	if len(se) == 0 || len(se)%aes.BlockSize != 0 {
+		return "", errors.New("encrypted query is not a whole number of AES blocks")
+	}
 	decrypted := make([]byte, len(se))
 	size := 16
 
@@ -98,5 +102,8 @@ func DecryptQueryParams(encryptedQuery string, key string) (string, error) {
 	}
 
 	paddingSize := int(decrypted[len(decrypted)-1])
+	if paddingSize == 0 || paddingSize > aes.BlockSize {
+		return "", errors.New("encrypted query has invalid padding")
+	}
 	return string(decrypted[0 : len(decrypted)-paddingSize]), nil
 }
