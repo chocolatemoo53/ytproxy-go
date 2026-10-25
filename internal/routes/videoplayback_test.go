@@ -149,3 +149,42 @@ func TestSetUserAgent(t *testing.T) {
 		t.Error("setUserAgent changed the shared default headers")
 	}
 }
+
+func TestHostFromServerParams(t *testing.T) {
+	cases := map[string]string{
+		"fvip=5&mn=sn-vgqskndl%2Csn-vgqsrnd7": "r5---sn-vgqskndl.googlevideo.com",
+		"fvip=12&mn=sn-abc-1":                 "r12---sn-abc-1.googlevideo.com",
+		"fvip=5":                              "",
+		"mn=sn-vgqskndl":                      "",
+		"fvip=5&mn=evil.example.com%2F":       "",
+		"fvip=5x&mn=sn-vgqskndl":              "",
+	}
+	for query, want := range cases {
+		params, _ := url.ParseQuery(query)
+		if got := hostFromServerParams(params); got != want {
+			t.Errorf("%s: got %q, want %q", query, got, want)
+		}
+	}
+}
+
+type hostRecordingTransport struct{ hosts *[]string }
+
+func (h hostRecordingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	*h.hosts = append(*h.hosts, req.URL.Host)
+	return &http.Response{StatusCode: http.StatusOK, Body: http.NoBody, Header: http.Header{}, Request: req}, nil
+}
+
+func TestURLWithoutHostGoesToTheServerItsParamsName(t *testing.T) {
+	config.LoadConfig()
+	log.StartLogger()
+	var hosts []string
+	httpc.Client = &http.Client{Transport: hostRecordingTransport{&hosts}}
+
+	target := "/videoplayback?itag=140&expire=9999999999&fvip=5&mn=sn-vgqskndl%2Csn-vgqsrnd7&ip=2602%3Afb54%3A1434%3A60ea%3A%3A1"
+	rec := httptest.NewRecorder()
+	Videoplayback(rec, httptest.NewRequest(http.MethodGet, target, nil))
+
+	if rec.Code != http.StatusOK || len(hosts) != 1 || hosts[0] != "r5---sn-vgqskndl.googlevideo.com" {
+		t.Fatalf("got status %d, upstream hosts %v", rec.Code, hosts)
+	}
+}

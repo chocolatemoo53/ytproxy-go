@@ -27,7 +27,10 @@ type config struct {
 	// The IPv6 rotation proxy's session file (/dev/shm/ipv6_rotation_affinity.json);
 	// with HTTP/3, a video's QUIC leaves from its session's address directly
 	Source_state string `yaml:"source_state" envconfig:"SOURCE_STATE"`
-	Companion    struct {
+	// The proxy's own address blocks (CIDRs): a URL that names no session
+	// leaves from the address in its ip param when that address is in one
+	Source_prefixes []string `yaml:"source_prefixes" envconfig:"SOURCE_PREFIXES"`
+	Companion       struct {
 		// Used for videoplayback query encryption
 		Secret_key string `yaml:"secret_key" envconfig:"SECRET_KEY"`
 		// Where the companion's own /videoplayback is (e.g. "/companion"):

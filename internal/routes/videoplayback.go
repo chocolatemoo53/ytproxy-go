@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -59,6 +60,22 @@ func forbiddenChecker(resp *http.Response, w http.ResponseWriter) error {
 	}
 	return nil
 }
+
+// hostFromServerParams is the googlevideo server a URL's fvip and mn params
+// name ("r5---sn-abc.googlevideo.com"), or "" when they don't.
+func hostFromServerParams(params url.Values) string {
+	fvip := params.Get("fvip")
+	mn, _, _ := strings.Cut(params.Get("mn"), ",")
+	if !serverNumber.MatchString(fvip) || !serverName.MatchString(mn) {
+		return ""
+	}
+	return "r" + fvip + "---" + mn + ".googlevideo.com"
+}
+
+var (
+	serverNumber = regexp.MustCompile(`^[0-9]{1,2}$`)
+	serverName   = regexp.MustCompile(`^sn-[a-z0-9-]+$`)
+)
 
 func checkRequest(w http.ResponseWriter, req *http.Request, params url.Values) bool {
 	host := params.Get("host")
@@ -166,6 +183,12 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 		processDecryptedQueryParams(&structuredDecryptedQueryParams, &q)
 	}
 
+	// Apps that put the instance in place of googlevideo's host send no host
+	// param; Invidious named the server from fvip and mn then
+	if q.Get("host") == "" {
+		q.Set("host", hostFromServerParams(q))
+	}
+
 	if checkRequest(w, req, q) {
 		log.Logger.Debug().Msg("request didn't met required checks, closing")
 		return
@@ -180,7 +203,11 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 	// names the session, so everything for one video leaves from one address.
 	session := q.Get("ytid")
 	q.Del("ytid")
-	ctx := httpc.WithSession(req.Context(), session)
+	dialSession := session
+	if dialSession == "" {
+		dialSession = httpc.AddressSession(q.Get("ip"))
+	}
+	ctx := httpc.WithSession(req.Context(), dialSession)
 
 	playbackSession := q.Get("ei")
 	if playbackSession == "" {

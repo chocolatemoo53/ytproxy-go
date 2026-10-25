@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,6 +40,26 @@ func sessionFrom(ctx context.Context) string {
 	return name
 }
 
+// addressSessionPrefix names a session by its source address (see AddressSession).
+const addressSessionPrefix = "ip:"
+
+// AddressSession is the session of a URL that names none (apps that put the
+// instance in place of googlevideo send no ytid): the address the URL was
+// issued to, its ip param, when that is in one of config.Cfg.Source_prefixes.
+func AddressSession(ip string) string {
+	addr := net.ParseIP(ip)
+	if addr == nil {
+		return ""
+	}
+	for _, prefix := range config.Cfg.Source_prefixes {
+		_, block, err := net.ParseCIDR(strings.TrimSpace(prefix))
+		if err == nil && block.Contains(addr) {
+			return addressSessionPrefix + addr.String()
+		}
+	}
+	return ""
+}
+
 // proxyFor is the proxy of a request: the configured one, logged in with the
 // session name of the request unless the URL has a login of its own.
 func proxyFor(r *http.Request) (*url.URL, error) {
@@ -49,7 +70,7 @@ func proxyFor(r *http.Request) (*url.URL, error) {
 	if err != nil {
 		return nil, err
 	}
-	if name := sessionFrom(r.Context()); name != "" && u.User == nil {
+	if name := sessionFrom(r.Context()); name != "" && !strings.HasPrefix(name, addressSessionPrefix) && u.User == nil {
 		u.User = url.UserPassword(name, sessionPassword)
 	}
 	return u, nil
@@ -124,7 +145,9 @@ func (p *h3Sessions) acquire(name string) (t http.RoundTripper, release func()) 
 	}
 	s, ok := p.entries[name]
 	if !ok {
-		if p.sourceState != "" {
+		if source, isAddress := strings.CutPrefix(name, addressSessionPrefix); isAddress {
+			s = &h3Session{t: &http3.Transport{Dial: boundDial(net.ParseIP(source))}}
+		} else if p.sourceState != "" {
 			source := sessionSource(p.sourceState, name)
 			if source == nil {
 				// The session's first request over the HTTP proxy gives it an address
