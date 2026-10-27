@@ -54,7 +54,11 @@ func beforeProxy(next http.HandlerFunc) http.HandlerFunc {
 		defer utils.PanicHandler(w)
 
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Headers", "*")
+		allowHeaders := "*"
+		if requested := req.Header.Get("Access-Control-Request-Headers"); requested != "" {
+			allowHeaders = requested
+		}
+		w.Header().Set("Access-Control-Allow-Headers", allowHeaders)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
 		w.Header().Set("Access-Control-Max-Age", "1728000")
 		w.Header().Set("Strict-Transport-Security", "max-age=86400")
