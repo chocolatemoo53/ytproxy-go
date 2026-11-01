@@ -22,7 +22,7 @@ var constants = struct {
 	DefaultUa:          defaultUa,
 	GgphtHost:          "yt3.ggpht.com",
 	VisionosUserAgent:  "com.google.visionos.youtube/1.04 (iPhone; U; iOS 26.6.0; en_US) C4D5D05E-F7B8-44F7-AB95-B13A1B8E4B41",
-	AndroidVrUserAgent: "com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12; eureka-user Build/SQ3A.220605.009.A1)",
+	AndroidVrUserAgent: "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip",
 	TvUserAgent:        "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/25.lts.30.1034943-gold (unlike Gecko), Unknown_TV_Unknown_0/Unknown (Unknown, Unknown)",
 	TvSamsungUserAgent: "Mozilla/5.0 (SMART-TV; Linux; Tizen 2.4.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/2.4.0 TV Safari/538.1",
 }
