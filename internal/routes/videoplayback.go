@@ -429,8 +429,6 @@ const (
 	chunksAhead = 4
 )
 
-// chunkedRange reads a range longer than one chunk, up to the end of the file
-// when clen is known. No range at all means the whole file.
 func chunkedRange(requestBytes, clen string) (from, to int64, ok bool) {
 	size, sizeErr := strconv.ParseInt(clen, 10, 64)
 	if requestBytes == "" {
