@@ -128,6 +128,96 @@ func TestLongRangesAreFetchedInChunks(t *testing.T) {
 	}
 }
 
+func TestChunkedRange(t *testing.T) {
+	size := strconv.Itoa(10 * chunkSize)
+	last := int64(10*chunkSize - 1)
+	cases := []struct {
+		requestBytes, clen string
+		from, to           int64
+		ok                 bool
+	}{
+		{"", size, 0, last, true},
+		{"", "", 0, 0, false},
+		{"0-", size, 0, last, true},
+		{"500-", size, 500, last, true},
+		{"500-", "", 0, 0, false},
+		{"0-" + strconv.Itoa(chunkSize*3), "", 0, chunkSize * 3, true},
+		{"0-" + strconv.Itoa(chunkSize*30), size, 0, last, true},
+		{"0-99", size, 0, 99, false},
+		{"-500", size, 0, 0, false},
+		{strconv.Itoa(20*chunkSize) + "-", size, 0, 0, false},
+	}
+	for _, c := range cases {
+		from, to, ok := chunkedRange(c.requestBytes, c.clen)
+		if ok != c.ok || (ok && (from != c.from || to != c.to)) {
+			t.Errorf("%q clen %q: got %d-%d %v", c.requestBytes, c.clen, from, to, ok)
+		}
+	}
+}
+
+func TestOpenAndMissingRangesAreFetchedInChunks(t *testing.T) {
+	config.LoadConfig()
+	log.StartLogger()
+	data := make([]byte, 5*chunkSize+123)
+	rand.Read(data)
+	size := len(data)
+	cases := []struct {
+		rangeHeader  string
+		from         int
+		code         int
+		contentRange string
+	}{
+		{"", 0, http.StatusOK, ""},
+		{"bytes=0-", 0, http.StatusPartialContent, fmt.Sprintf("bytes 0-%d/%d", size-1, size)},
+		{"bytes=100-", 100, http.StatusPartialContent, fmt.Sprintf("bytes 100-%d/%d", size-1, size)},
+		{fmt.Sprintf("bytes=100-%d", size+999), 100, http.StatusPartialContent, fmt.Sprintf("bytes 100-%d/%d", size-1, size)},
+	}
+	for _, c := range cases {
+		var ranges []string
+		httpc.Client = &http.Client{Transport: rangeTransport{data, &ranges, &sync.Mutex{}}}
+		req := httptest.NewRequest("GET", "/videoplayback?host=rr1---sn-test.googlevideo.com&itag=313&expire=9999999999&title=video.mp4&clen="+strconv.Itoa(size), nil)
+		if c.rangeHeader != "" {
+			req.Header.Set("Range", c.rangeHeader)
+		}
+		rec := httptest.NewRecorder()
+		Videoplayback(rec, req)
+		if rec.Code != c.code {
+			t.Fatalf("%q: want %d, got %d", c.rangeHeader, c.code, rec.Code)
+		}
+		if !bytes.Equal(rec.Body.Bytes(), data[c.from:]) {
+			t.Fatalf("%q: wrong body (%d bytes)", c.rangeHeader, rec.Body.Len())
+		}
+		if got := rec.Header().Get("Content-Range"); got != c.contentRange {
+			t.Fatalf("%q: Content-Range %q", c.rangeHeader, got)
+		}
+		if got := rec.Header().Get("Content-Length"); got != strconv.Itoa(size-c.from) {
+			t.Fatalf("%q: Content-Length %s", c.rangeHeader, got)
+		}
+		if !strings.Contains(rec.Header().Get("Content-Disposition"), "video.mp4") {
+			t.Fatalf("%q: lost the download filename", c.rangeHeader)
+		}
+		if len(ranges) < 2 {
+			t.Fatalf("%q: want chunk requests, got %v", c.rangeHeader, ranges)
+		}
+	}
+}
+
+func TestHeadIsNotChunked(t *testing.T) {
+	if _, _, ok := chunkedRange("", "1000"); ok {
+		t.Fatal("a file under one chunk must not be chunked")
+	}
+	config.LoadConfig()
+	log.StartLogger()
+	data := make([]byte, 5*chunkSize)
+	var ranges []string
+	httpc.Client = &http.Client{Transport: rangeTransport{data, &ranges, &sync.Mutex{}}}
+	req := httptest.NewRequest("HEAD", "/videoplayback?host=rr1---sn-test.googlevideo.com&itag=313&expire=9999999999&clen="+strconv.Itoa(len(data)), nil)
+	Videoplayback(httptest.NewRecorder(), req)
+	if len(ranges) > 1 {
+		t.Fatalf("HEAD must not fetch chunks, got %v", ranges)
+	}
+}
+
 func TestSetUserAgent(t *testing.T) {
 	cases := []struct{ client, cver, ua string }{
 		{"VISIONOS", "", constants.VisionosUserAgent},

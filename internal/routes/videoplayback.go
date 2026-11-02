@@ -238,7 +238,8 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 	}
 	// googlevideo paces a long request to about the format's bitrate after a fast
 	// start, so a 4K segment arrived as slowly as it plays: fetch it in pieces
-	chunkFrom, chunkTo, chunked := chunkedRange(requestBytes)
+	chunkFrom, chunkTo, chunked := chunkedRange(requestBytes, q.Get("clen"))
+	chunked = chunked && req.Method == http.MethodGet
 	if chunked {
 		q.Set("range", strconv.FormatInt(chunkFrom, 10)+"-"+strconv.FormatInt(chunkFrom+chunkSize-1, 10))
 	} else if requestBytes != "" {
@@ -339,7 +340,16 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set("content-disposition", content)
 	}
 
-	if requestBytes != "" && resp.StatusCode == http.StatusOK {
+	if chunked && requestBytes != "" {
+		total := q.Get("clen")
+		if total == "" {
+			total = "*"
+		}
+		w.Header().Set("Content-Range", "bytes "+strconv.FormatInt(chunkFrom, 10)+"-"+strconv.FormatInt(chunkTo, 10)+"/"+total)
+		w.WriteHeader(http.StatusPartialContent)
+	}
+
+	if !chunked && requestBytes != "" && resp.StatusCode == http.StatusOK {
 		// check for range headers in the forms:
 		// "bytes=0-" get full length from start
 		// "bytes=500-" get full length from 500 bytes in
@@ -419,15 +429,36 @@ const (
 	chunksAhead = 4
 )
 
-// chunkedRange reads a closed range "from-to" longer than one chunk.
-func chunkedRange(requestBytes string) (from, to int64, ok bool) {
-	parts := strings.Split(requestBytes, "-")
-	if len(parts) != 2 {
+// chunkedRange reads a range longer than one chunk, up to the end of the file
+// when clen is known. No range at all means the whole file.
+func chunkedRange(requestBytes, clen string) (from, to int64, ok bool) {
+	size, sizeErr := strconv.ParseInt(clen, 10, 64)
+	if requestBytes == "" {
+		requestBytes = "0-"
+	}
+	first, last, found := strings.Cut(requestBytes, "-")
+	if !found {
 		return 0, 0, false
 	}
-	from, err1 := strconv.ParseInt(parts[0], 10, 64)
-	to, err2 := strconv.ParseInt(parts[1], 10, 64)
-	return from, to, err1 == nil && err2 == nil && to-from+1 > chunkSize
+	from, err := strconv.ParseInt(first, 10, 64)
+	if err != nil {
+		return 0, 0, false
+	}
+	if last == "" {
+		if sizeErr != nil {
+			return 0, 0, false
+		}
+		to = size - 1
+	} else {
+		to, err = strconv.ParseInt(last, 10, 64)
+		if err != nil {
+			return 0, 0, false
+		}
+		if sizeErr == nil {
+			to = min(to, size-1)
+		}
+	}
+	return from, to, to-from+1 > chunkSize
 }
 
 // copyChunks writes bytes from-to of the URL, fetched chunkSize at a time with up
