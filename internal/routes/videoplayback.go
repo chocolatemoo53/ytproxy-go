@@ -240,7 +240,7 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 	// googlevideo paces a long request to about the format's bitrate after a fast
 	// start, so a 4K segment arrived as slowly as it plays: fetch it in pieces
 	chunkFrom, chunkTo, chunked := chunkedRange(requestBytes, q.Get("clen"))
-	chunked = chunked && req.Method == http.MethodGet
+	chunked = chunked && req.Method == http.MethodGet && (rangeHeader != "" || q.Get("range") == "")
 	if chunked {
 		q.Set("range", strconv.FormatInt(chunkFrom, 10)+"-"+strconv.FormatInt(chunkFrom+chunkSize-1, 10))
 	} else if requestBytes != "" {

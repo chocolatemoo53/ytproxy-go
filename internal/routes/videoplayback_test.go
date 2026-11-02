@@ -278,3 +278,20 @@ func TestURLWithoutHostGoesToTheServerItsParamsName(t *testing.T) {
 		t.Fatalf("got status %d, upstream hosts %v", rec.Code, hosts)
 	}
 }
+
+func TestRangeInTheQueryIsKept(t *testing.T) {
+	config.LoadConfig()
+	log.StartLogger()
+	data := make([]byte, 5*chunkSize)
+	rand.Read(data)
+	var ranges []string
+	httpc.Client = &http.Client{Transport: rangeTransport{data, &ranges, &sync.Mutex{}}}
+
+	req := httptest.NewRequest("GET", "/videoplayback?host=rr1---sn-test.googlevideo.com&itag=313&expire=9999999999&range=500-999&clen="+strconv.Itoa(len(data)), nil)
+	rec := httptest.NewRecorder()
+	Videoplayback(rec, req)
+
+	if !bytes.Equal(rec.Body.Bytes(), data[500:1000]) {
+		t.Fatalf("want the 500 bytes asked for, got %d (asked googlevideo for %v)", rec.Body.Len(), ranges)
+	}
+}
