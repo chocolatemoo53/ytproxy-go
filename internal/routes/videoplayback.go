@@ -203,6 +203,7 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 	// names the session, so everything for one video leaves from one address.
 	session := q.Get("ytid")
 	q.Del("ytid")
+	q.Del("issuer")
 	dialSession := session
 	if dialSession == "" {
 		dialSession = httpc.AddressSession(q.Get("ip"))
