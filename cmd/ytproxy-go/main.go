@@ -93,6 +93,8 @@ func main() {
 		httpc.Client = httpc.H1_1client
 	}
 
+	routes.StartVideoCacheSweeper()
+
 	mux := http.NewServeMux()
 
 	// MISC ROUTES

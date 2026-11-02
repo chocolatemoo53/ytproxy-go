@@ -95,6 +95,10 @@ func (p *playback) Collect(ch chan<- prometheus.Metric) {
 	}
 }
 
+func FormatName(itag string) string {
+	return itagFormats[itag][1]
+}
+
 func describe(itag, mime string) (kind, format string) {
 	if f, ok := itagFormats[itag]; ok {
 		return f[0], f[1]

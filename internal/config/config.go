@@ -30,6 +30,8 @@ type config struct {
 	// The proxy's own address blocks (CIDRs): a URL that names no session
 	// leaves from the address in its ip param when that address is in one
 	Source_prefixes []string `yaml:"source_prefixes" envconfig:"SOURCE_PREFIXES"`
+	Video_cache_dir string   `yaml:"video_cache_dir" envconfig:"VIDEO_CACHE_DIR"`
+	Video_cache_gb  int64    `yaml:"video_cache_gb" envconfig:"VIDEO_CACHE_GB"`
 	Companion       struct {
 		// Used for videoplayback query encryption
 		Secret_key string `yaml:"secret_key" envconfig:"SECRET_KEY"`
@@ -63,6 +65,7 @@ func LoadConfig() {
 		Http_client_ver: 1,
 		Ipv6_only:       false,
 		LogLevel:        "info",
+		Video_cache_gb:  50,
 		Companion: struct {
 			Secret_key    string "yaml:\"secret_key\" envconfig:\"SECRET_KEY\""
 			Fallback_path string "yaml:\"fallback_path\" envconfig:\"FALLBACK_PATH\""

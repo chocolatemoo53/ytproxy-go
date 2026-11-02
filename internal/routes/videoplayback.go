@@ -241,6 +241,15 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 	// start, so a 4K segment arrived as slowly as it plays: fetch it in pieces
 	chunkFrom, chunkTo, chunked := chunkedRange(requestBytes, q.Get("clen"))
 	chunked = chunked && req.Method == http.MethodGet && (rangeHeader != "" || q.Get("range") == "")
+
+	cacheEntry := newVideoCacheEntry(req, q, host, title, chunkFrom, chunkTo)
+	if cacheEntry != nil {
+		if cacheEntry.serve(w) {
+			return
+		}
+		cacheEntry.admit()
+	}
+
 	if chunked {
 		q.Set("range", strconv.FormatInt(chunkFrom, 10)+"-"+strconv.FormatInt(chunkFrom+chunkSize-1, 10))
 	} else if requestBytes != "" {
@@ -415,9 +424,15 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 
 		_, _ = io.WriteString(w, strings.Join(lines, "\n"))
 	} else {
-		_, _ = io.Copy(w, resp.Body)
+		var body io.Writer = w
+		if cacheEntry != nil && resp.StatusCode == http.StatusOK {
+			cacheWriter := cacheEntry.writer(w)
+			defer cacheWriter.finish()
+			body = cacheWriter
+		}
+		_, _ = io.Copy(body, resp.Body)
 		if chunked {
-			err := copyChunks(ctx, w, resp.Request.URL, postRequest.Header, chunkFrom+chunkSize, chunkTo)
+			err := copyChunks(ctx, body, resp.Request.URL, postRequest.Header, chunkFrom+chunkSize, chunkTo)
 			if err != nil {
 				log.Logger.Warn().Err(err).Str("session", session).Msg("failed to fetch the rest of a chunked range")
 			}
