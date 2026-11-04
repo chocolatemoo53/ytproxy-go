@@ -424,13 +424,13 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 
 		_, _ = io.WriteString(w, strings.Join(lines, "\n"))
 	} else {
-		var body io.Writer = w
+		var body io.Writer = countingWriter{w}
 		if cacheEntry != nil && resp.StatusCode == http.StatusOK {
-			cacheWriter := cacheEntry.writer(w)
+			cacheWriter := cacheEntry.writer(body)
 			defer cacheWriter.finish()
 			body = cacheWriter
 		}
-		_, _ = io.Copy(body, resp.Body)
+		_, _ = io.Copy(body, countingReader{resp.Body})
 		if chunked {
 			err := copyChunks(ctx, body, resp.Request.URL, postRequest.Header, chunkFrom+chunkSize, chunkTo)
 			if err != nil {
@@ -444,6 +444,22 @@ const (
 	chunkSize   = 2 << 20
 	chunksAhead = 4
 )
+
+type countingReader struct{ r io.Reader }
+
+func (c countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	metrics.Metrics.VideoplaybackBytes.WithLabelValues("from_google").Add(float64(n))
+	return n, err
+}
+
+type countingWriter struct{ w io.Writer }
+
+func (c countingWriter) Write(p []byte) (int, error) {
+	n, err := c.w.Write(p)
+	metrics.Metrics.VideoplaybackBytes.WithLabelValues("to_viewer").Add(float64(n))
+	return n, err
+}
 
 func chunkedRange(requestBytes, clen string) (from, to int64, ok bool) {
 	size, sizeErr := strconv.ParseInt(clen, 10, 64)
@@ -533,7 +549,7 @@ func fetchChunk(ctx context.Context, base *url.URL, header http.Header, start, e
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("googlevideo answered %d for bytes %d-%d", resp.StatusCode, start, end)
 	}
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(countingReader{resp.Body})
 	if err == nil && int64(len(body)) != end-start+1 {
 		err = fmt.Errorf("got %d bytes for %d-%d", len(body), start, end)
 	}
