@@ -13,7 +13,11 @@ type metrics struct {
 	IdleConnections        prometheus.Gauge
 	VideoCacheBytes        *prometheus.CounterVec
 	VideoplaybackBytes     *prometheus.CounterVec
-	RequestForbidden       struct {
+
+	VideoplaybackTransferSeconds *prometheus.CounterVec
+	VideoplaybackTransferBytes   *prometheus.CounterVec
+
+	RequestForbidden struct {
 		Videoplayback prometheus.Counter
 		Vi            prometheus.Counter
 		Storyboards   prometheus.Counter
@@ -54,6 +58,14 @@ var Metrics = metrics{
 		Name: "http3_ytproxy_videoplayback_bytes",
 		Help: "Video bytes read from googlevideo and written to viewers",
 	}, []string{"direction"}),
+	VideoplaybackTransferSeconds: prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "http3_ytproxy_videoplayback_transfer_seconds",
+		Help: "Time spent on completed video requests",
+	}, []string{"kind"}),
+	VideoplaybackTransferBytes: prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name: "http3_ytproxy_videoplayback_transfer_bytes",
+		Help: "Bytes of completed video requests",
+	}, []string{"kind"}),
 
 	RequestForbidden: struct {
 		Videoplayback prometheus.Counter
@@ -87,6 +99,8 @@ func init() {
 	prometheus.MustRegister(Metrics.RequestPerMinute)
 	prometheus.MustRegister(Metrics.VideoCacheBytes)
 	prometheus.MustRegister(Metrics.VideoplaybackBytes)
+	prometheus.MustRegister(Metrics.VideoplaybackTransferSeconds)
+	prometheus.MustRegister(Metrics.VideoplaybackTransferBytes)
 	prometheus.MustRegister(Metrics.RequestForbidden.Videoplayback)
 	prometheus.MustRegister(Metrics.RequestForbidden.Vi)
 	prometheus.MustRegister(Metrics.RequestForbidden.Storyboards)

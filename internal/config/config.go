@@ -32,6 +32,8 @@ type config struct {
 	Source_prefixes []string `yaml:"source_prefixes" envconfig:"SOURCE_PREFIXES"`
 	Video_cache_dir string   `yaml:"video_cache_dir" envconfig:"VIDEO_CACHE_DIR"`
 	Video_cache_gb  int64    `yaml:"video_cache_gb" envconfig:"VIDEO_CACHE_GB"`
+	Chunks_ahead    int      `yaml:"chunks_ahead" envconfig:"CHUNKS_AHEAD"`
+	Quic_window_mb  uint64   `yaml:"quic_window_mb" envconfig:"QUIC_WINDOW_MB"`
 	Companion       struct {
 		// Used for videoplayback query encryption
 		Secret_key string `yaml:"secret_key" envconfig:"SECRET_KEY"`
@@ -66,6 +68,7 @@ func LoadConfig() {
 		Ipv6_only:       false,
 		LogLevel:        "info",
 		Video_cache_gb:  50,
+		Chunks_ahead:    4,
 		Companion: struct {
 			Secret_key    string "yaml:\"secret_key\" envconfig:\"SECRET_KEY\""
 			Fallback_path string "yaml:\"fallback_path\" envconfig:\"FALLBACK_PATH\""

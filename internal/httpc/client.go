@@ -13,6 +13,7 @@ import (
 
 	"git.nadeko.net/Fijxu/ytproxy-go/internal/config"
 	"git.nadeko.net/Fijxu/ytproxy-go/internal/log"
+	"github.com/quic-go/quic-go"
 	"github.com/quic-go/quic-go/http3"
 )
 
@@ -104,6 +105,17 @@ var H3client = &http.Client{
 // its requests has been in flight for h3SessionIdle instead.
 const h3SessionIdle = 10 * time.Minute
 
+func quicConfig() *quic.Config {
+	if config.Cfg.Quic_window_mb == 0 {
+		return nil
+	}
+	return &quic.Config{
+		MaxIncomingStreams:     -1,
+		KeepAlivePeriod:        10 * time.Second,
+		MaxStreamReceiveWindow: config.Cfg.Quic_window_mb << 20,
+	}
+}
+
 type h3Session struct {
 	t        *http3.Transport
 	inFlight int
@@ -146,14 +158,14 @@ func (p *h3Sessions) acquire(name string) (t http.RoundTripper, release func()) 
 	s, ok := p.entries[name]
 	if !ok {
 		if source, isAddress := strings.CutPrefix(name, addressSessionPrefix); isAddress {
-			s = &h3Session{t: &http3.Transport{Dial: boundDial(net.ParseIP(source))}}
+			s = &h3Session{t: &http3.Transport{QUICConfig: quicConfig(), Dial: boundDial(net.ParseIP(source))}}
 		} else if p.sourceState != "" {
 			source := sessionSource(p.sourceState, name)
 			if source == nil {
 				// The session's first request over the HTTP proxy gives it an address
 				return p.fallback, func() {}
 			}
-			s = &h3Session{t: &http3.Transport{Dial: boundDial(source)}}
+			s = &h3Session{t: &http3.Transport{QUICConfig: quicConfig(), Dial: boundDial(source)}}
 		} else {
 			proxy := p.proxy
 			proxy.User = name

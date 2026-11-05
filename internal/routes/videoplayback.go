@@ -430,20 +430,24 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 			defer cacheWriter.finish()
 			body = cacheWriter
 		}
-		_, _ = io.Copy(body, countingReader{resp.Body})
+		written, copyErr := io.Copy(body, countingReader{resp.Body})
+		kind := "single"
 		if chunked {
-			err := copyChunks(ctx, body, resp.Request.URL, postRequest.Header, chunkFrom+chunkSize, chunkTo)
-			if err != nil {
-				log.Logger.Warn().Err(err).Str("session", session).Msg("failed to fetch the rest of a chunked range")
+			kind = "chunked"
+			written = chunkTo - chunkFrom + 1
+			copyErr = copyChunks(ctx, body, resp.Request.URL, postRequest.Header, chunkFrom+chunkSize, chunkTo)
+			if copyErr != nil {
+				log.Logger.Warn().Err(copyErr).Str("session", session).Msg("failed to fetch the rest of a chunked range")
 			}
+		}
+		if copyErr == nil {
+			metrics.Metrics.VideoplaybackTransferSeconds.WithLabelValues(kind).Add(time.Since(start).Seconds())
+			metrics.Metrics.VideoplaybackTransferBytes.WithLabelValues(kind).Add(float64(written))
 		}
 	}
 }
 
-const (
-	chunkSize   = 2 << 20
-	chunksAhead = 4
-)
+const chunkSize = 2 << 20
 
 type countingReader struct{ r io.Reader }
 
@@ -492,7 +496,7 @@ func chunkedRange(requestBytes, clen string) (from, to int64, ok bool) {
 }
 
 // copyChunks writes bytes from-to of the URL, fetched chunkSize at a time with up
-// to chunksAhead requests in flight, in order.
+// to config.Cfg.Chunks_ahead requests in flight, in order.
 func copyChunks(ctx context.Context, w io.Writer, base *url.URL, header http.Header, from, to int64) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -500,6 +504,7 @@ func copyChunks(ctx context.Context, w io.Writer, base *url.URL, header http.Hea
 		body []byte
 		err  error
 	}
+	chunksAhead := max(config.Cfg.Chunks_ahead, 1)
 	ahead := make(chan struct{}, chunksAhead)
 	queue := make(chan chan result, chunksAhead)
 	go func() {
