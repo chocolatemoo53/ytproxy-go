@@ -96,6 +96,21 @@ func TestOneViewerIsNotCached(t *testing.T) {
 	}
 }
 
+func TestFirstViewIsCachedWhenEnabled(t *testing.T) {
+	data, ranges, _ := videoCacheTestSetup(t, 5*chunkSize)
+	config.Cfg.Video_cache_first_view = true
+	from, to := 0, 4096
+
+	videoCacheTestRequest(t, "137", videoCacheTestSigned, len(data), from, to)
+	rec := videoCacheTestRequest(t, "137", videoCacheTestSigned, len(data), from, to)
+	if len(*ranges) != 1 {
+		t.Fatalf("the second viewer must be served from disk, got %v", *ranges)
+	}
+	if !bytes.Equal(rec.Body.Bytes(), data[from:to+1]) {
+		t.Fatalf("stored bytes differ (%d bytes)", rec.Body.Len())
+	}
+}
+
 func TestOnlyCachedFormatsAndSignedParamsAreStored(t *testing.T) {
 	cases := []struct{ name, itag, extra string }{
 		{"low resolution", "136", videoCacheTestSigned},

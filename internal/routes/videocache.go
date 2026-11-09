@@ -96,7 +96,7 @@ func (e *videoCacheEntry) serve(w http.ResponseWriter) bool {
 func (e *videoCacheEntry) admit() {
 	popular := filepath.Join(e.dir, videoCachePopular)
 	if e.from == 0 && e.to >= videoCacheMinStart {
-		if err := os.Mkdir(e.dir, 0o755); errors.Is(err, fs.ErrExist) {
+		if err := os.Mkdir(e.dir, 0o755); errors.Is(err, fs.ErrExist) || (err == nil && config.Cfg.Video_cache_first_view) {
 			if file, err := os.OpenFile(popular, os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
 				file.Close()
 			}

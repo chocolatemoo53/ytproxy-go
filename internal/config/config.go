@@ -29,12 +29,13 @@ type config struct {
 	Source_state string `yaml:"source_state" envconfig:"SOURCE_STATE"`
 	// The proxy's own address blocks (CIDRs): a URL that names no session
 	// leaves from the address in its ip param when that address is in one
-	Source_prefixes []string `yaml:"source_prefixes" envconfig:"SOURCE_PREFIXES"`
-	Video_cache_dir string   `yaml:"video_cache_dir" envconfig:"VIDEO_CACHE_DIR"`
-	Video_cache_gb  int64    `yaml:"video_cache_gb" envconfig:"VIDEO_CACHE_GB"`
-	Chunks_ahead    int      `yaml:"chunks_ahead" envconfig:"CHUNKS_AHEAD"`
-	Quic_window_mb  uint64   `yaml:"quic_window_mb" envconfig:"QUIC_WINDOW_MB"`
-	Companion       struct {
+	Source_prefixes        []string `yaml:"source_prefixes" envconfig:"SOURCE_PREFIXES"`
+	Video_cache_dir        string   `yaml:"video_cache_dir" envconfig:"VIDEO_CACHE_DIR"`
+	Video_cache_gb         int64    `yaml:"video_cache_gb" envconfig:"VIDEO_CACHE_GB"`
+	Video_cache_first_view bool     `yaml:"video_cache_first_view" envconfig:"VIDEO_CACHE_FIRST_VIEW"`
+	Chunks_ahead           int      `yaml:"chunks_ahead" envconfig:"CHUNKS_AHEAD"`
+	Quic_window_mb         uint64   `yaml:"quic_window_mb" envconfig:"QUIC_WINDOW_MB"`
+	Companion              struct {
 		// Used for videoplayback query encryption
 		Secret_key string `yaml:"secret_key" envconfig:"SECRET_KEY"`
 		// Where the companion's own /videoplayback is (e.g. "/companion"):
