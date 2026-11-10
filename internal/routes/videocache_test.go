@@ -68,6 +68,30 @@ func TestPopularFormatIsServedFromDisk(t *testing.T) {
 	}
 }
 
+func TestRangeInsideStoredPieceIsServedFromDisk(t *testing.T) {
+	data, ranges, _ := videoCacheTestSetup(t, 5*chunkSize)
+	for i := 0; i < 3; i++ {
+		videoCacheTestRequest(t, "137", videoCacheTestSigned, len(data), 0, 4096)
+	}
+	before := len(*ranges)
+
+	rec := videoCacheTestRequest(t, "137", videoCacheTestSigned, len(data), 100, 999)
+	if len(*ranges) != before {
+		t.Fatalf("a range inside a stored piece must not reach googlevideo, got %v", *ranges)
+	}
+	if rec.Code != http.StatusPartialContent || !bytes.Equal(rec.Body.Bytes(), data[100:1000]) {
+		t.Fatalf("got %d with %d bytes", rec.Code, rec.Body.Len())
+	}
+	if got := rec.Header().Get("Content-Range"); got != fmt.Sprintf("bytes 100-999/%d", len(data)) {
+		t.Fatalf("Content-Range %q", got)
+	}
+
+	videoCacheTestRequest(t, "137", videoCacheTestSigned, len(data), 4000, 5000)
+	if len(*ranges) != before+1 {
+		t.Fatalf("a range past the stored piece must reach googlevideo, got %v", *ranges)
+	}
+}
+
 func TestLongRangeIsStoredWhole(t *testing.T) {
 	data, ranges, _ := videoCacheTestSetup(t, 8*chunkSize)
 	first, last := 0, 3*chunkSize+50

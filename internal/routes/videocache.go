@@ -71,26 +71,67 @@ func newVideoCacheEntry(req *http.Request, q url.Values, host, title string, fro
 }
 
 func (e *videoCacheEntry) serve(w http.ResponseWriter) bool {
-	file, err := os.Open(e.path)
-	if err != nil {
+	file := e.open()
+	if file == nil {
 		return false
 	}
 	defer file.Close()
-	info, err := file.Stat()
-	if err != nil || info.Size() != e.to-e.from+1 {
-		return false
-	}
+	size := e.to - e.from + 1
 	now := time.Now()
 	_ = os.Chtimes(e.dir, now, now)
 	header := w.Header()
 	header.Set("Accept-Ranges", "bytes")
 	header.Set("Content-Type", e.mime)
-	header.Set("Content-Length", strconv.FormatInt(info.Size(), 10))
+	header.Set("Content-Length", strconv.FormatInt(size, 10))
 	header.Set("Content-Range", "bytes "+strconv.FormatInt(e.from, 10)+"-"+strconv.FormatInt(e.to, 10)+"/"+e.clen)
 	w.WriteHeader(http.StatusPartialContent)
-	written, _ := io.Copy(w, file)
+	written, _ := io.CopyN(w, file, size)
 	metrics.Metrics.VideoCacheBytes.WithLabelValues("hit").Add(float64(written))
 	return true
+}
+
+func (e *videoCacheEntry) open() *os.File {
+	if file := openVideoCacheFile(e.path, e.to-e.from+1, 0); file != nil {
+		return file
+	}
+	dir, err := os.Open(e.dir)
+	if err != nil {
+		return nil
+	}
+	names, _ := dir.Readdirnames(-1)
+	dir.Close()
+	for _, name := range names {
+		start, end, ok := strings.Cut(name, "-")
+		if !ok {
+			continue
+		}
+		from, fromErr := strconv.ParseInt(start, 10, 64)
+		to, toErr := strconv.ParseInt(end, 10, 64)
+		if fromErr != nil || toErr != nil || from > e.from || to < e.to {
+			continue
+		}
+		if file := openVideoCacheFile(filepath.Join(e.dir, name), to-from+1, e.from-from); file != nil {
+			return file
+		}
+	}
+	return nil
+}
+
+func openVideoCacheFile(path string, size, offset int64) *os.File {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	info, err := file.Stat()
+	if err != nil || info.Size() != size {
+		file.Close()
+		return nil
+	}
+	if _, err := file.Seek(offset, io.SeekStart); err != nil {
+		file.Close()
+		return nil
+	}
+	return file
 }
 
 func (e *videoCacheEntry) admit() {
