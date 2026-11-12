@@ -15,7 +15,7 @@ FROM mirror.gcr.io/alpine:3.24
 
 RUN adduser -u 10001 -S appuser
 
-RUN apk add --no-cache libwebp
+RUN apk add --no-cache libwebp ffmpeg
 
 WORKDIR /app/
 

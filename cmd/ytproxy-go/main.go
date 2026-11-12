@@ -105,6 +105,7 @@ func main() {
 	// PROXY ROUTES
 	mux.HandleFunc("GET /videoplayback", beforeProxy(routes.Videoplayback))
 	mux.HandleFunc("OPTIONS /videoplayback", beforeProxy(routes.Options))
+	mux.HandleFunc("GET /videoplayback/remux", beforeProxy(routes.Remux))
 	mux.HandleFunc("GET /vi/{id}/{name}", beforeProxy(routes.Vi))
 	mux.HandleFunc("GET /vi_webp/{id}/{name}", beforeProxy(routes.Vi))
 	mux.HandleFunc("GET /sb/{authority}/{id}/{storyboard}/{index}", beforeProxy(routes.Storyboards))
