@@ -3,8 +3,10 @@ package routes
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -121,6 +123,15 @@ func checkRequest(w http.ResponseWriter, req *http.Request, params url.Values) b
 }
 
 // Send the user agent of the client the URL was issued to, named by its c and cver params
+func doVideoplayback(req *http.Request) (*http.Response, error) {
+	resp, err := httpc.Client.Do(req)
+	var netErr net.Error
+	if err != nil && errors.As(err, &netErr) && netErr.Timeout() && req.Context().Err() == nil {
+		return httpc.Client.Do(req)
+	}
+	return resp, err
+}
+
 func setUserAgent(headers *http.Header, youtubeClient string, clientVersion string) {
 	switch {
 	// Native apps aren't on a youtube.com page, so they send no Origin or Referer
@@ -273,54 +284,34 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "failed to create GET request", http.StatusInternalServerError)
 		return
 	}
-	headRequest, err := http.NewRequestWithContext(ctx, "HEAD", proxyURL.String(), nil)
-	if err != nil {
-		log.Logger.Error().Err(err).Msg("failed to create HEAD request")
-		http.Error(w, "failed to create HEAD request", http.StatusInternalServerError)
-		return
-	}
-
 	youtubeClient := q.Get("c")
 
 	videoplaybackHeaders := defaultHeaders.Clone()
 	log.Logger.Trace().Any("headers", videoplaybackHeaders).Msg("setting default headers for /videoplayback request")
 	setUserAgent(&videoplaybackHeaders, youtubeClient, q.Get("cver"))
 	postRequest.Header = videoplaybackHeaders
-	headRequest.Header = videoplaybackHeaders
 
-	resp := &http.Response{}
-
-	// https://datatracker.ietf.org/doc/html/draft-ietf-httpbis-p2-semantics-17#section-7.3
-	// A maximum of 5 redirections is defined in the note of the section 7.3
-	// of this RFC, that's why `i < 5`
-	//
-	// Only for clients that don't follow redirects themselves: the HTTP/3
-	// client does, and the HEAD would cost every request a round trip.
-	for i := 0; i < 5 && httpc.Client.CheckRedirect != nil; i++ {
-		resp, err = httpc.Client.Do(headRequest)
+	var resp *http.Response
+	for i := 0; ; i++ {
+		resp, err = doVideoplayback(postRequest)
 		if err != nil {
-			log.Logger.Error().Err(err).Str("session", session).Dur("after", time.Since(start)).Msg("failed to do HEAD request")
-			http.Error(w, "failed to do HEAD request to googlevideo", http.StatusBadGateway)
+			log.Logger.Error().Err(err).Str("session", session).Dur("after", time.Since(start)).Msg("failed to do GET request")
+			http.Error(w, "failed to do GET request to googlevideo", http.StatusBadGateway)
 			return
 		}
-		resp.Body.Close()
-		if resp.Header.Get("Location") != "" {
-			new_url, _ := url.Parse(resp.Header.Get("Location"))
-			postRequest.URL = new_url
-			headRequest.URL = new_url
-			postRequest.Host = new_url.Host
-			headRequest.Host = new_url.Host
-			continue
-		} else {
+		location := resp.Header.Get("Location")
+		if httpc.Client.CheckRedirect == nil || location == "" || resp.StatusCode < 300 || resp.StatusCode > 399 || i == 4 {
 			break
 		}
-	}
-
-	resp, err = httpc.Client.Do(postRequest)
-	if err != nil {
-		log.Logger.Error().Err(err).Str("session", session).Dur("after", time.Since(start)).Msg("failed to do GET request")
-		http.Error(w, "failed to do GET request to googlevideo", http.StatusBadGateway)
-		return
+		resp.Body.Close()
+		next, err := postRequest.URL.Parse(location)
+		if err != nil {
+			log.Logger.Error().Err(err).Str("session", session).Msg("googlevideo redirected to an invalid URL")
+			http.Error(w, "googlevideo redirected to an invalid URL", http.StatusBadGateway)
+			return
+		}
+		postRequest.URL = next
+		postRequest.Host = next.Host
 	}
 	// Before the 403 check: an unclosed body holds its HTTP/3 stream
 	defer resp.Body.Close()

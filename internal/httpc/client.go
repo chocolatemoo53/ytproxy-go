@@ -260,7 +260,7 @@ var H1_1client = &http.Client{
 			return dialer.Dial(net, addr)
 		},
 		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 20 * time.Second,
+		ResponseHeaderTimeout: 10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 		IdleConnTimeout:       30 * time.Second,
 		ReadBufferSize:        16 * 1024,
@@ -289,7 +289,7 @@ var H2client = &http.Client{
 			return dialer.Dial(net, addr)
 		},
 		TLSHandshakeTimeout:   10 * time.Second,
-		ResponseHeaderTimeout: 20 * time.Second,
+		ResponseHeaderTimeout: 10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 		IdleConnTimeout:       30 * time.Second,
 		ReadBufferSize:        16 * 1024,

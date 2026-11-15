@@ -295,3 +295,80 @@ func TestRangeInTheQueryIsKept(t *testing.T) {
 		t.Fatalf("want the 500 bytes asked for, got %d (asked googlevideo for %v)", rec.Body.Len(), ranges)
 	}
 }
+
+type redirectTransport struct {
+	methods *[]string
+	mu      *sync.Mutex
+}
+
+func (f redirectTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	f.mu.Lock()
+	*f.methods = append(*f.methods, req.Method+" "+req.URL.Host)
+	f.mu.Unlock()
+	if req.URL.Host == "rr1---sn-test.googlevideo.com" {
+		return &http.Response{
+			StatusCode: http.StatusFound,
+			Body:       http.NoBody,
+			Header:     http.Header{"Location": {"https://rr2---sn-test.googlevideo.com" + req.URL.RequestURI()}},
+			Request:    req,
+		}, nil
+	}
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader("ok")),
+		Header:     http.Header{"Content-Length": {"2"}, "Content-Type": {"audio/mp4"}},
+		Request:    req,
+	}, nil
+}
+
+func TestRedirectIsFollowedWithoutHead(t *testing.T) {
+	config.LoadConfig()
+	log.StartLogger()
+	var methods []string
+	httpc.Client = &http.Client{
+		Transport:     redirectTransport{&methods, &sync.Mutex{}},
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+	rec := httptest.NewRecorder()
+	Videoplayback(rec, httptest.NewRequest("GET", "/videoplayback?host=rr1---sn-test.googlevideo.com&itag=140&expire=9999999999", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got %d", rec.Code)
+	}
+	want := []string{"GET rr1---sn-test.googlevideo.com", "GET rr2---sn-test.googlevideo.com"}
+	if strings.Join(methods, ",") != strings.Join(want, ",") {
+		t.Fatalf("want %v, got %v", want, methods)
+	}
+}
+
+type timeoutErr struct{}
+
+func (timeoutErr) Error() string   { return "timeout awaiting response headers" }
+func (timeoutErr) Timeout() bool   { return true }
+func (timeoutErr) Temporary() bool { return true }
+
+type timeoutOnceTransport struct{ calls *int }
+
+func (f timeoutOnceTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	*f.calls++
+	if *f.calls == 1 {
+		return nil, timeoutErr{}
+	}
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader("ok")),
+		Header:     http.Header{"Content-Length": {"2"}, "Content-Type": {"audio/mp4"}},
+		Request:    req,
+	}, nil
+}
+
+func TestTimedOutRequestIsRetriedOnce(t *testing.T) {
+	config.LoadConfig()
+	log.StartLogger()
+	calls := 0
+	httpc.Client = &http.Client{Transport: timeoutOnceTransport{&calls}}
+	rec := httptest.NewRecorder()
+	Videoplayback(rec, httptest.NewRequest("GET", "/videoplayback?host=rr1---sn-test.googlevideo.com&itag=140&expire=9999999999", nil))
+	if rec.Code != http.StatusOK || calls != 2 {
+		t.Fatalf("want 200 after one retry, got %d after %d calls", rec.Code, calls)
+	}
+}
