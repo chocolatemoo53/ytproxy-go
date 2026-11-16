@@ -225,7 +225,7 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 	if playbackSession == "" {
 		playbackSession = session
 	}
-	metrics.Playback.Seen(playbackSession, q.Get("itag"), q.Get("mime"))
+	metrics.Playback.Seen(playbackSession, q.Get("itag"), q.Get("mime"), metrics.App(req.Header.Get("X-Client-App"), req.Header.Get("Origin"), req.Header.Get("Referer")))
 
 	// The companion's own /videoplayback asks YouTube for a fresh URL when one
 	// is refused (another client, another address); a player sent here skips

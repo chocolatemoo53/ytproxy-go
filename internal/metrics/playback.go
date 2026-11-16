@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,8 +17,8 @@ const playbackWindow = time.Minute
 type stream struct{ session, itag string }
 
 type streamSeen struct {
-	at           time.Time
-	kind, format string
+	at                time.Time
+	kind, format, app string
 }
 
 type playback struct {
@@ -25,6 +26,7 @@ type playback struct {
 	seen      map[stream]streamSeen
 	lastPrune time.Time
 	sessions  *prometheus.Desc
+	byApp     *prometheus.Desc
 	streams   *prometheus.Desc
 }
 
@@ -35,6 +37,8 @@ var Playback = &playback{
 	seen: map[stream]streamSeen{},
 	sessions: prometheus.NewDesc("http3_ytproxy_playback_sessions",
 		"Playback sessions that fetched video or audio in the last minute", nil, nil),
+	byApp: prometheus.NewDesc("http3_ytproxy_playback_sessions_by_app",
+		"Playback sessions in the last minute, by the site the player runs on", []string{"app"}, nil),
 	streams: prometheus.NewDesc("http3_ytproxy_playback_streams",
 		"Streams fetched in the last minute, by kind and format", []string{"kind", "format"}, nil),
 }
@@ -43,11 +47,11 @@ func init() {
 	prometheus.MustRegister(Playback)
 }
 
-func (p *playback) Seen(session, itag, mime string) {
-	p.seenAt(time.Now(), session, itag, mime)
+func (p *playback) Seen(session, itag, mime, app string) {
+	p.seenAt(time.Now(), session, itag, mime, app)
 }
 
-func (p *playback) seenAt(now time.Time, session, itag, mime string) {
+func (p *playback) seenAt(now time.Time, session, itag, mime, app string) {
 	if session == "" || itag == "" {
 		return
 	}
@@ -57,7 +61,7 @@ func (p *playback) seenAt(now time.Time, session, itag, mime string) {
 	if now.Sub(p.lastPrune) > playbackWindow {
 		p.prune(now)
 	}
-	p.seen[stream{session, itag}] = streamSeen{now, kind, format}
+	p.seen[stream{session, itag}] = streamSeen{now, kind, format, app}
 }
 
 func (p *playback) prune(now time.Time) {
@@ -69,30 +73,66 @@ func (p *playback) prune(now time.Time) {
 	p.lastPrune = now
 }
 
-func (p *playback) snapshot(now time.Time) (sessions int, streams map[[2]string]int) {
+func (p *playback) snapshot(now time.Time) (sessions int, streams map[[2]string]int, apps map[string]int) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.prune(now)
-	ids := map[string]struct{}{}
+	ids := map[string]string{}
 	streams = map[[2]string]int{}
 	for key, s := range p.seen {
-		ids[key.session] = struct{}{}
+		ids[key.session] = s.app
 		streams[[2]string{s.kind, s.format}]++
 	}
-	return len(ids), streams
+	apps = map[string]int{}
+	for _, app := range ids {
+		apps[app]++
+	}
+	return len(ids), streams, apps
 }
 
 func (p *playback) Describe(ch chan<- *prometheus.Desc) {
 	ch <- p.sessions
+	ch <- p.byApp
 	ch <- p.streams
 }
 
 func (p *playback) Collect(ch chan<- prometheus.Metric) {
-	sessions, streams := p.snapshot(time.Now())
+	sessions, streams, apps := p.snapshot(time.Now())
 	ch <- prometheus.MustNewConstMetric(p.sessions, prometheus.GaugeValue, float64(sessions))
+	for app, n := range apps {
+		ch <- prometheus.MustNewConstMetric(p.byApp, prometheus.GaugeValue, float64(n), app)
+	}
 	for labels, n := range streams {
 		ch <- prometheus.MustNewConstMetric(p.streams, prometheus.GaugeValue, float64(n), labels[0], labels[1])
 	}
+}
+
+var knownApps = []string{"chocolatemoo53.com", "pigeonduck.com", "ytify.pp.ua"}
+
+func App(tagged, origin, referer string) string {
+	if tagged != "" {
+		return tagged
+	}
+	if origin == "" || origin == "null" {
+		origin = referer
+	}
+	if origin == "" {
+		return "none"
+	}
+	u, err := url.Parse(origin)
+	if err != nil || u.Hostname() == "" {
+		return "other"
+	}
+	host := strings.ToLower(u.Hostname())
+	for _, app := range knownApps {
+		if host == app || strings.HasSuffix(host, "."+app) {
+			return app
+		}
+	}
+	if strings.HasSuffix(host, ".onion") || strings.HasSuffix(host, ".i2p") {
+		return "chocolatemoo53.com"
+	}
+	return "other"
 }
 
 func FormatName(itag string) string {
