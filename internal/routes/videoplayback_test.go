@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"git.nadeko.net/Fijxu/ytproxy-go/internal/config"
 	"git.nadeko.net/Fijxu/ytproxy-go/internal/httpc"
@@ -324,6 +325,7 @@ func (f redirectTransport) RoundTrip(req *http.Request) (*http.Response, error) 
 func TestRedirectIsFollowedWithoutHead(t *testing.T) {
 	config.LoadConfig()
 	log.StartLogger()
+	resetEdges()
 	var methods []string
 	httpc.Client = &http.Client{
 		Transport:     redirectTransport{&methods, &sync.Mutex{}},
@@ -364,11 +366,97 @@ func (f timeoutOnceTransport) RoundTrip(req *http.Request) (*http.Response, erro
 func TestTimedOutRequestIsRetriedOnce(t *testing.T) {
 	config.LoadConfig()
 	log.StartLogger()
+	resetEdges()
 	calls := 0
 	httpc.Client = &http.Client{Transport: timeoutOnceTransport{&calls}}
 	rec := httptest.NewRecorder()
 	Videoplayback(rec, httptest.NewRequest("GET", "/videoplayback?host=rr1---sn-test.googlevideo.com&itag=140&expire=9999999999", nil))
 	if rec.Code != http.StatusOK || calls != 2 {
 		t.Fatalf("want 200 after one retry, got %d after %d calls", rec.Code, calls)
+	}
+}
+
+func TestEdgeCacheRemembersAndForgets(t *testing.T) {
+	orig, _ := url.Parse("https://rr1---sn-a.googlevideo.com/videoplayback?id=x&range=0-99")
+	final, _ := url.Parse("https://rr5---sn-b.googlevideo.com/videoplayback?id=x&range=0-99&cms_redirect=yes")
+	key := edgeKey(orig)
+	if knownEdge(key, "") != nil {
+		t.Fatal("edge known before it was remembered")
+	}
+	rememberEdge(key, final)
+	other, _ := url.Parse("https://rr1---sn-a.googlevideo.com/videoplayback?id=x&range=100-199")
+	if edgeKey(other) != key {
+		t.Fatal("range should not change the edge key")
+	}
+	got := knownEdge(key, "100-199")
+	if got == nil || got.Host != "rr5---sn-b.googlevideo.com" || got.Query().Get("range") != "100-199" || got.Query().Get("cms_redirect") != "yes" {
+		t.Fatalf("knownEdge = %v", got)
+	}
+	forgetEdge(key)
+	if knownEdge(key, "") != nil {
+		t.Fatal("edge still known after forgetEdge")
+	}
+	edges.Lock()
+	edges.m[key] = edgeEntry{withoutRange(final), time.Now().Add(-time.Second)}
+	edges.Unlock()
+	if knownEdge(key, "") != nil {
+		t.Fatal("expired edge returned")
+	}
+}
+
+func resetEdges() {
+	edges.Lock()
+	edges.m = map[string]edgeEntry{}
+	edges.Unlock()
+}
+
+type staleEdgeTransport struct {
+	methods *[]string
+	mu      *sync.Mutex
+}
+
+func (f staleEdgeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	f.mu.Lock()
+	*f.methods = append(*f.methods, req.URL.Host)
+	f.mu.Unlock()
+	if req.URL.Host == "rr2---sn-test.googlevideo.com" {
+		return &http.Response{StatusCode: http.StatusServiceUnavailable, Body: http.NoBody, Header: http.Header{}, Request: req}, nil
+	}
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(strings.NewReader("ok")),
+		Header:     http.Header{"Content-Length": {"2"}, "Content-Type": {"audio/mp4"}},
+		Request:    req,
+	}, nil
+}
+
+func TestRememberedEdgeIsReusedAndDroppedWhenStale(t *testing.T) {
+	config.LoadConfig()
+	log.StartLogger()
+	resetEdges()
+	target := "/videoplayback?host=rr1---sn-test.googlevideo.com&itag=251&expire=9999999999"
+	noFollow := func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+
+	var methods []string
+	httpc.Client = &http.Client{Transport: redirectTransport{&methods, &sync.Mutex{}}, CheckRedirect: noFollow}
+	Videoplayback(httptest.NewRecorder(), httptest.NewRequest("GET", target, nil))
+	methods = nil
+	rec := httptest.NewRecorder()
+	Videoplayback(rec, httptest.NewRequest("GET", target, nil))
+	if rec.Code != http.StatusOK || strings.Join(methods, ",") != "GET rr2---sn-test.googlevideo.com" {
+		t.Fatalf("second request should go straight to the remembered edge, got %d %v", rec.Code, methods)
+	}
+
+	var hosts []string
+	httpc.Client = &http.Client{Transport: staleEdgeTransport{&hosts, &sync.Mutex{}}, CheckRedirect: noFollow}
+	rec = httptest.NewRecorder()
+	Videoplayback(rec, httptest.NewRequest("GET", target, nil))
+	if rec.Code != http.StatusOK || strings.Join(hosts, ",") != "rr2---sn-test.googlevideo.com,rr1---sn-test.googlevideo.com" {
+		t.Fatalf("a stale edge must fall back to the original host, got %d %v", rec.Code, hosts)
+	}
+	hosts = nil
+	Videoplayback(httptest.NewRecorder(), httptest.NewRequest("GET", target, nil))
+	if strings.Join(hosts, ",") != "rr1---sn-test.googlevideo.com" {
+		t.Fatalf("the stale edge must be forgotten, got %v", hosts)
 	}
 }

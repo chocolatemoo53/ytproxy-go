@@ -291,9 +291,28 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 	setUserAgent(&videoplaybackHeaders, youtubeClient, q.Get("cver"))
 	postRequest.Header = videoplaybackHeaders
 
+	key := edgeKey(proxyURL)
+	usedEdge := false
+	if edge := knownEdge(key, q.Get("range")); edge != nil {
+		postRequest.URL = edge
+		postRequest.Host = edge.Host
+		usedEdge = true
+	}
+	redirected := false
+
 	var resp *http.Response
 	for i := 0; ; i++ {
 		resp, err = doVideoplayback(postRequest)
+		if usedEdge && (err != nil || resp.StatusCode < 200 || resp.StatusCode > 299) {
+			if err == nil {
+				resp.Body.Close()
+			}
+			forgetEdge(key)
+			usedEdge = false
+			postRequest.URL = proxyURL
+			postRequest.Host = proxyURL.Host
+			continue
+		}
 		if err != nil {
 			log.Logger.Error().Err(err).Str("session", session).Dur("after", time.Since(start)).Msg("failed to do GET request")
 			http.Error(w, "failed to do GET request to googlevideo", http.StatusBadGateway)
@@ -312,6 +331,10 @@ func Videoplayback(w http.ResponseWriter, req *http.Request) {
 		}
 		postRequest.URL = next
 		postRequest.Host = next.Host
+		redirected = true
+	}
+	if redirected && resp.StatusCode >= 200 && resp.StatusCode <= 299 {
+		rememberEdge(key, postRequest.URL)
 	}
 	// Before the 403 check: an unclosed body holds its HTTP/3 stream
 	defer resp.Body.Close()
@@ -550,4 +573,68 @@ func fetchChunk(ctx context.Context, base *url.URL, header http.Header, start, e
 		err = fmt.Errorf("got %d bytes for %d-%d", len(body), start, end)
 	}
 	return body, err
+}
+
+type edgeEntry struct {
+	url     *url.URL
+	expires time.Time
+}
+
+const edgeTTL = 10 * time.Minute
+
+var edges = struct {
+	sync.Mutex
+	m map[string]edgeEntry
+}{m: map[string]edgeEntry{}}
+
+func withoutRange(u *url.URL) *url.URL {
+	c := *u
+	q := c.Query()
+	q.Del("range")
+	c.RawQuery = q.Encode()
+	return &c
+}
+
+func edgeKey(u *url.URL) string {
+	return withoutRange(u).String()
+}
+
+func rememberEdge(key string, final *url.URL) {
+	now := time.Now()
+	edges.Lock()
+	defer edges.Unlock()
+	if len(edges.m) >= 20000 {
+		for k, e := range edges.m {
+			if now.After(e.expires) {
+				delete(edges.m, k)
+			}
+		}
+	}
+	edges.m[key] = edgeEntry{withoutRange(final), now.Add(edgeTTL)}
+}
+
+func knownEdge(key, rangeValue string) *url.URL {
+	edges.Lock()
+	e, ok := edges.m[key]
+	if ok && time.Now().After(e.expires) {
+		delete(edges.m, key)
+		ok = false
+	}
+	edges.Unlock()
+	if !ok {
+		return nil
+	}
+	u := *e.url
+	if rangeValue != "" {
+		q := u.Query()
+		q.Set("range", rangeValue)
+		u.RawQuery = q.Encode()
+	}
+	return &u
+}
+
+func forgetEdge(key string) {
+	edges.Lock()
+	delete(edges.m, key)
+	edges.Unlock()
 }
